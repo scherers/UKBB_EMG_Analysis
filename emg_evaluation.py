@@ -1,0 +1,363 @@
+import sys
+
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
+import numpy as np
+from numpy.fft import fft, ifft, fftshift
+import copy
+
+
+def lowpass(data, cutoff):
+	fourier = fftshift(fft(np.array(data,dtype=float)))
+	timestep = 0.002
+	freq = np.fft.fftfreq(len(data), d=timestep)
+	freq = fftshift(freq)
+
+	for i in range(0,len(freq)):
+		if freq[i] > -abs(cutoff):
+			i_low = i
+			break
+	for i in range(0,len(freq)):
+		if freq[i] > abs(cutoff):
+			i_high = i
+			break
+	result = []
+	for i in range(0,len(freq)):
+		if (i < i_low) or (i > i_high):
+			result.append(complex(0.0, 0.0))
+		else:
+			result.append(fourier[i])
+	result_shift = fftshift(np.array(result))
+	data_filt = ifft(np.array(result_shift,dtype=complex))
+
+	result = []
+	for c in data_filt:
+		result.append(c.real)
+
+	return result
+
+
+def HMS(seconds, pos):
+	"""Customized x-axis ticks 
+	
+	Keyword arguments:
+	seconds -- input in secs
+	pos -- somehow required argument (matplotlib)
+	"""
+	seconds = int(seconds)
+	hours = seconds / 3600
+	seconds -= 3600 * hours
+	minutes = seconds / 60
+	seconds -= 60 * minutes
+	if hours == 0:
+		if minutes == 0:
+			return "%ds" % (seconds)
+		return "%dm%02ds" % (minutes, seconds)
+	return "%dh%02dm" % (hours, minutes)
+
+
+def readData(filename):
+	infile = open(filename)
+	infile.readline()
+	f_dia = []
+	rms_dia = []
+	time_axis = []
+	time_as_string = []
+	motiondetection_usage = []
+	count = 0
+	for l in infile:
+		tmp = l.split(",")
+		f_dia.append(float(tmp[2]))
+		rms_dia.append(float(tmp[3]))
+		time_axis.append(count/500.0)
+		time_as_string.append(tmp[0])
+		if len(tmp) >= 5:
+			motiondetection_usage.append(int(tmp[4]))
+		else:
+			motiondetection_usage.append(1)
+		count += 1
+
+	print "reading done"
+	return [f_dia, rms_dia, time_axis, motiondetection_usage, time_as_string]
+
+
+def thresholdRMSD(rmsd_data, cutoff, delta):
+	print "RMSD Filter"
+	i = 0
+	index = []
+	while i < (len(rmsd_data)):
+		if (i>0) and (np.fmod(i,1000) < 0.001):
+			sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/len(rmsd_data)) )
+			sys.stdout.flush()
+		if rmsd_data[i] < cutoff:
+			index.append(1)
+			i += 1
+		else:
+			for j in range(-delta,0):
+				if (i+j) >= 0:
+					index[i+j] = 0
+			for j in range(0,delta):
+				if (i+j) < len(rmsd_data):
+					index.append(0)
+			i += delta
+	print '\ndone'
+	return index
+
+
+def findPeaks(data, index, lower_bound, upper_bound):
+	cleaned_data = np.array(data) * np.array(index)
+	peaks = []
+	mode = 1
+	for i in range(0,len(cleaned_data)):
+		if cleaned_data[i] > lower_bound:
+			peaks.append(1)
+		else:
+			peaks.append(0)
+	return peaks
+
+
+def cleanPeaks(peaks, window):
+	i = 0
+	result = copy.deepcopy(peaks)
+	while i < len(result):
+		if result[i] > 0:
+			for j in range(1,peak_clean_range):
+				if i+j < len(result):
+					result[i+j] = 0
+			i += peak_clean_range
+		else:
+			i += 1
+	return result
+
+
+def getTimeString(t):
+	seconds = int(t)
+	hours = seconds / 3600
+	seconds -= 3600 * hours
+	minutes = seconds / 60
+	seconds -= 60 * minutes
+	return str(hours) + ":" + str(minutes) + ":" + str(seconds)
+
+
+def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, lp_all, lp_filtered):
+	outfile = open(filename, 'w')
+
+	print "writing output"
+	
+	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","lp_all","lp_filtered"\r\n'
+	outfile.write(header)
+
+	for i in range(0,len(time_as_string)):
+		if (i>0) and (np.fmod(i,1000) < 0.001):
+			sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/len(time_as_string)) )
+			sys.stdout.flush()
+		result = time_as_string[i] + ","
+		result += str(usage_md[i]) + ","
+		result += str(usage_rmsd[i]) + ","
+		result += str(f[i]) + ","
+		result += str(rmsd[i]) + ","
+		result += str(beat[i]) + ","
+		result += str(lp_all[i]) + ","
+		result += str(lp_filtered[i]) + "\r\n"
+		outfile.write(result)
+	outfile.close()
+	print "\r\ndone"
+
+
+if __name__ == "__main__":
+	print 'Number of arguments:', len(sys.argv), 'arguments.'
+	print 'Argument List:', str(sys.argv)
+	
+	filename = sys.argv[1]
+	
+	pdf_file = ''.join(filename.split(".")[:-1]) + ".pdf"
+	print "pdf-file:", pdf_file
+
+	pdf_file_peakfitting = ''.join(filename.split(".")[:-1]) + "_peak_fitting.pdf"
+	print "pdf-file2:", pdf_file_peakfitting
+
+	csv_out_file = ''.join(filename.split(".")[:-1]) + "_eval.csv"
+	print "csv-out-file:", csv_out_file
+	
+	[y_raw, rmsd, x, usage_vec, t_string] = readData(filename)
+
+	limit_manual = min(int(30 * 60 * 500), len(y_raw))
+	limit_manual = len(y_raw)
+	limit = 60 * 500 * (limit_manual / (60*500) )
+
+	y_raw = y_raw[:limit]
+	lowpass_y = lowpass(y_raw,0.6)
+
+	y = []
+	for i in range(0,len(y_raw)):
+		y.append((y_raw[i]-lowpass_y[i]))
+
+	print 'RMSD Stat (mean,std)', np.mean(rmsd), np.std(rmsd)
+	print 'F Stat (mean,std)', np.mean(y), np.std(y)
+	
+	rmsd_cutoff = min([np.mean(rmsd)+np.std(rmsd), 2*np.mean(rmsd)])
+	print "rmsd-cutoff", rmsd_cutoff
+
+	peak_cutoff =  2*np.std(y)
+	print "peak-cutoff", peak_cutoff
+
+	lp = 1.8
+	print "low-pass freq", lp
+
+	y = y[:limit]
+	rmsd = rmsd[:limit]
+	x = x[:limit]
+	usage_vec = usage_vec[:limit]
+	t_string = t_string[:limit]
+
+	delta = 2500	
+	index = thresholdRMSD(rmsd, rmsd_cutoff, delta)
+
+	peak_clean_range = int(500 / 5)
+
+	if abs(np.mean(y)) > 0:
+		peak_value = 0
+		th = 10.0*np.std(np.array(y)**2)
+		n_peaks_vec = []
+		th_vec = []
+		count = 0
+		while peak_value < 4:
+			peaks = findPeaks(np.array(y)**2, np.ones(len(y)), th, 10000)
+			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
+			peaks_indexed = np.array(index) * np.array(peaks_cleaned)
+			peak_value = 500 * np.mean(np.array(peaks_indexed)) / np.mean(np.array(index))
+			print "\tpeak value", peak_value, th
+			n_peaks_vec.append(peak_value)
+			th_vec.append(th)
+			count += 1
+			th *= 0.9
+
+		plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
+		plt.savefig(pdf_file_peakfitting)
+	
+		slope = []
+		for i in range(0,len(n_peaks_vec)-1):
+			if n_peaks_vec[i] > 1:
+				slope.append(abs(n_peaks_vec[i]-n_peaks_vec[i+1]))
+			else:
+				slope.append(100)
+		th = th_vec[slope.index(min(slope))]
+	else:
+		print 'no values'
+		th = 1
+
+	peaks = findPeaks(np.array(y)**2, np.ones(len(y)), th, 10000)
+	peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
+	peaks_indexed = np.array(index) * np.array(peaks_cleaned)
+		
+	passed = lowpass(y, lp)
+
+	beat_int_x_filt = []
+	beat_int_y_filt = []
+	for i in range(0,len(peaks_indexed)):
+		if peaks_indexed[i] == 1:
+			dx = 1000
+			for j in range(1,1000):
+				if  (i+j)<len(peaks_indexed) and peaks_indexed[i+j] == 1:
+					dx = j
+					break
+			if dx < 1000:
+				beat_int_x_filt.append(x[i])
+				beat_int_y_filt.append(1.0/(float(dx)/500))
+
+	beat_int_x = []
+	beat_int_y = []
+	for i in range(0,len(peaks_cleaned)):
+		if peaks_cleaned[i] == 1:
+			dx = 1000
+			for j in range(1,1000):
+				if  (i+j)<len(peaks_cleaned) and peaks_cleaned[i+j] == 1:
+					dx = j
+					break
+			if dx < 1000:
+				beat_int_x.append(x[i])
+				beat_int_y.append(1.0/(float(dx)/500))
+
+
+	print "writing plots"
+	pdf_pages = PdfPages(pdf_file)	
+
+	dx = 60 * 500
+	for i in range(0, limit, dx):
+
+		sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/limit) )
+		sys.stdout.flush()
+
+		index_low = i
+		index_high = min(i+dx, limit)
+
+		plt.rc('font', **{'size':'5'})
+
+		fig, axes = plt.subplots(nrows=6, ncols=1)
+		fig.tight_layout(pad=3.0, w_pad=4.0, h_pad=3.0)
+
+		ax1 = plt.subplot(7, 1, 1)
+		ax1.xaxis.set_major_formatter(plt.FuncFormatter(HMS))
+		ax1.set_ylim([-2*np.std(np.array(y)), 2*np.std(np.array(y))])
+		plt.plot(x[index_low:index_high], np.array(y[index_low:index_high]))
+
+		plt.title("Raw signal")
+	
+		ax = plt.subplot(7, 1, 2, sharex=ax1)
+		ax.set_ylim([-0.1, 5])
+		plt.plot(x[index_low:index_high], rmsd[index_low:index_high])
+		plt.title("RMSD")
+
+		ax = plt.subplot(7, 1, 3, sharex=ax1)
+		ax.set_ylim([-1, 2])
+		plt.plot(x[index_low:index_high], peaks_cleaned[index_low:index_high])
+		plt.title("Beats")
+
+		ax = plt.subplot(7, 1, 4, sharex=ax1)
+		plt.plot(x[index_low:index_high], passed[index_low:index_high])
+		plt.title("Low-pass @1.5Hz")
+
+		ax = plt.subplot(7, 1, 5, sharex=ax1)
+		ax.set_ylim([-3, 3])
+		plt.plot(x[index_low:index_high], peaks_indexed[index_low:index_high], alpha=0.4)
+		passed_filtered = np.clip(passed,-3, 3) * np.array(index)
+		plt.plot(x[index_low:index_high], passed_filtered[index_low:index_high], 'g')
+		plt.title("Beats and low-passed signal")
+	
+		ax = plt.subplot(7, 1, 6, sharex=ax1)
+		ax.set_ylim([-3, 4])
+		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
+		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
+		plt.legend(loc=4, fontsize=5, ncol=2)
+		plt.grid()
+		plt.title("Data quality indicator")
+
+		beat_int_filt_low = [n for n, j in enumerate(beat_int_x_filt) if j>(i/500)]
+		beat_int_filt_high = [n for n, j in enumerate(beat_int_x_filt) if j<(i/500) + dx/500]
+
+		beat_int_low = [n for n, j in enumerate(beat_int_x) if j>(i/500)]
+		beat_int_high = [n for n, j in enumerate(beat_int_x) if j<(i/500) + dx/500]
+
+		if len(beat_int_filt_low)>0 and len(beat_int_filt_high)>0:
+			index_low_filt = beat_int_filt_low[0]
+			index_high_filt = beat_int_filt_high[-1]
+			index_low = beat_int_low[0]
+			index_high = beat_int_high[-1]
+			ax = plt.subplot(7, 1, 7, sharex=ax1)
+			ax.set_ylim([0, 4])
+			plt.plot(beat_int_x[index_low:index_high], beat_int_y[index_low:index_high], 'o', alpha=0.25)
+			plt.plot(beat_int_x_filt[index_low_filt:index_high_filt], beat_int_y_filt[index_low_filt:index_high_filt], 'ob')
+			plt.grid()
+			plt.title("Beat frequencies")
+
+		pdf_pages.savefig(fig)
+		fig.clf()
+		plt.clf()
+
+	pdf_pages.close()
+	print "\r\ndone"
+
+	writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, passed, passed_filtered)
+
+	
