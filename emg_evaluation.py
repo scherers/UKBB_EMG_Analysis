@@ -14,28 +14,16 @@ def lowpass(data, cutoff):
 	freq = np.fft.fftfreq(len(data), d=timestep)
 	freq = fftshift(freq)
 
-	for i in range(0,len(freq)):
-		if freq[i] > -abs(cutoff):
-			i_low = i
-			break
-	for i in range(0,len(freq)):
-		if freq[i] > abs(cutoff):
-			i_high = i
-			break
-	result = []
-	for i in range(0,len(freq)):
-		if (i < i_low) or (i > i_high):
-			result.append(complex(0.0, 0.0))
-		else:
-			result.append(fourier[i])
+	i_low = np.where(freq > -abs(cutoff))[0][0]
+	i_high = np.where(freq > abs(cutoff))[0][0]
+    
+	result = np.zeros((1,len(data)), dtype=complex)[0]
+	result[i_low:i_high] = fourier[i_low:i_high]
+
 	result_shift = fftshift(np.array(result))
 	data_filt = ifft(np.array(result_shift,dtype=complex))
 
-	result = []
-	for c in data_filt:
-		result.append(c.real)
-
-	return result
+	return data_filt.real
 
 
 def HMS(seconds, pos):
@@ -85,21 +73,16 @@ def readData(filename):
 def thresholdRMSD(rmsd_data, cutoff, delta):
 	print "RMSD Filter"
 	i = 0
-	index = []
+	index = np.zeros((1,len(rmsd_data)), dtype=int)[0]
 	while i < (len(rmsd_data)):
 		if (i>0) and (np.fmod(i,1000) < 0.001):
 			sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/len(rmsd_data)) )
 			sys.stdout.flush()
 		if rmsd_data[i] < cutoff:
-			index.append(1)
+			index[i] = 1
 			i += 1
 		else:
-			for j in range(-delta,0):
-				if (i+j) >= 0:
-					index[i+j] = 0
-			for j in range(0,delta):
-				if (i+j) < len(rmsd_data):
-					index.append(0)
+			index[max(i-delta, 0):i] = 0
 			i += delta
 	print '\ndone'
 	return index
@@ -108,7 +91,6 @@ def thresholdRMSD(rmsd_data, cutoff, delta):
 def findPeaks(data, index, lower_bound, upper_bound):
 	cleaned_data = np.array(data) * np.array(index)
 	peaks = []
-	mode = 1
 	for i in range(0,len(cleaned_data)):
 		if cleaned_data[i] > lower_bound:
 			peaks.append(1)
@@ -131,6 +113,56 @@ def cleanPeaks(peaks, window):
 	return result
 
 
+def detectQRS(emg):
+	## QRS-Detection
+	# Based on DF1 (adapted to sampling rate) from Paper
+	# "A Comparison of the Noise Sensitivity of Nine QRS Detection Algorithms"
+	# Friesen et al., IEEE 1990
+	# CAUTION: Hardcoded for a sampling frequency of 500Hz!
+
+	# differentiator with 62.5 Hz notch filter
+	y0 = np.zeros((1,len(emg)), dtype=float)[0]
+	
+	for n in range(8, len(emg)-6):
+         y0[n] = emg[n] - emg[n-8]
+
+	# lowpass filter
+	y1 = np.zeros((1,len(emg)), dtype=float)[0]
+	for n in range(5, len(emg)-1):
+         y1[n] = sum(y0[n-5:n]*np.array([1, 4, 6, 4, 1]))
+
+	# detection thresholds
+	thresUP = np.mean(y1)+np.std(y1)      # upper threshold
+	thresDOWN = np.mean(y1)+np.std(y1)    # lower threshold
+	bound = 80          # search window size (=160ms)
+
+	# QRS detection
+	cand = np.nonzero(y1[0:-bound-1] > thresUP)[0]
+	qrs = [];
+	for c in range(0, len(cand)-1):
+         i = cand[c];
+         if qrs:
+             if i < qrs[-1]+bound:
+                 continue;
+         qrsflag = 0
+         j = []
+         k = []
+         l = []
+         j = np.nonzero(y1[i+1:i+bound] < thresDOWN)[0][0]
+         if j:
+             qrsflag = 1
+             k = np.nonzero(y1[i+j:i+bound] > thresUP)[0][0]
+             if k:
+                 l = np.nonzero(y1[i+j+k:i+bound] < thresDOWN)[0][0]
+                 if l:
+                     if np.nonzero(y1[i+j+k+l:i+bound] > thresUP)[0]:
+                         qrsflag = 0;
+
+         if qrsflag > 0:
+             qrs.append(i)
+	
+	return qrs
+
 def getTimeString(t):
 	seconds = int(t)
 	hours = seconds / 3600
@@ -140,12 +172,12 @@ def getTimeString(t):
 	return str(hours) + ":" + str(minutes) + ":" + str(seconds)
 
 
-def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, lp_all, lp_filtered):
+def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_beat, lp_all, lp_filtered):
 	outfile = open(filename, 'w')
 
 	print "writing output"
 	
-	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","lp_all","lp_filtered"\r\n'
+	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","qrs_beat","lp_all","lp_filtered"\r\n'
 	outfile.write(header)
 
 	for i in range(0,len(time_as_string)):
@@ -158,6 +190,7 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, lp_a
 		result += str(f[i]) + ","
 		result += str(rmsd[i]) + ","
 		result += str(beat[i]) + ","
+		result += str(qrs_beat[i]) + ","
 		result += str(lp_all[i]) + ","
 		result += str(lp_filtered[i]) + "\r\n"
 		outfile.write(result)
@@ -171,11 +204,15 @@ if __name__ == "__main__":
 	
 	filename = sys.argv[1]
 	
-	pdf_file = ''.join(filename.split(".")[:-1]) + ".pdf"
-	print "pdf-file:", pdf_file
+	#Flag for writing PDFs (or jusr CSV)
+	writePDF = True
 
-	pdf_file_peakfitting = ''.join(filename.split(".")[:-1]) + "_peak_fitting.pdf"
-	print "pdf-file2:", pdf_file_peakfitting
+	if writePDF:
+		pdf_file = ''.join(filename.split(".")[:-1]) + ".pdf"
+		print "pdf-file:", pdf_file
+
+		pdf_file_peakfitting = ''.join(filename.split(".")[:-1]) + "_peak_fitting.pdf"
+		print "pdf-file2:", pdf_file_peakfitting
 
 	csv_out_file = ''.join(filename.split(".")[:-1]) + "_eval.csv"
 	print "csv-out-file:", csv_out_file
@@ -233,8 +270,9 @@ if __name__ == "__main__":
 			count += 1
 			th *= 0.9
 
-		plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
-		plt.savefig(pdf_file_peakfitting)
+		if writePDF:
+			plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
+			plt.savefig(pdf_file_peakfitting)
 	
 		slope = []
 		for i in range(0,len(n_peaks_vec)-1):
@@ -252,6 +290,7 @@ if __name__ == "__main__":
 	peaks_indexed = np.array(index) * np.array(peaks_cleaned)
 		
 	passed = lowpass(y, lp)
+	passed_filtered = np.clip(passed,-3, 3) * np.array(index)
 
 	beat_int_x_filt = []
 	beat_int_y_filt = []
@@ -279,85 +318,93 @@ if __name__ == "__main__":
 				beat_int_x.append(x[i])
 				beat_int_y.append(1.0/(float(dx)/500))
 
+	qrs_beats = detectQRS(y)
+	qrs_peaks = np.zeros((1,len(y)), dtype=int)[0]
+	for q in qrs_beats:
+         qrs_peaks[q] = 1
 
-	print "writing plots"
-	pdf_pages = PdfPages(pdf_file)	
+	qrs_peaks_indexed = np.array(index) * np.array(qrs_peaks)
 
-	dx = 60 * 500
-	for i in range(0, limit, dx):
+	if writePDF:
+		print "writing plots"
+		pdf_pages = PdfPages(pdf_file)	
 
-		sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/limit) )
-		sys.stdout.flush()
+		dx = 60 * 500
+        	for i in range(0, limit, dx):
+        
+        		sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/limit) )
+        		sys.stdout.flush()
+        
+        		index_low = i
+        		index_high = min(i+dx, limit)
+        
+        		plt.rc('font', **{'size':'5'})
+        
+        		fig, axes = plt.subplots(nrows=6, ncols=1)
+        		fig.tight_layout(pad=3.0, w_pad=4.0, h_pad=3.0)
+        
+        		ax1 = plt.subplot(7, 1, 1)
+        		ax1.xaxis.set_major_formatter(plt.FuncFormatter(HMS))
+        		ax1.set_ylim([-2*np.std(np.array(y)), 2*np.std(np.array(y))])
+        		plt.plot(x[index_low:index_high], np.array(y[index_low:index_high]))
+        
+        		plt.title("Raw signal")
+        	
+        		ax = plt.subplot(7, 1, 2, sharex=ax1)
+        		ax.set_ylim([-0.1, 5])
+        		plt.plot(x[index_low:index_high], rmsd[index_low:index_high])
+        		plt.title("RMSD")
+        
+        		ax = plt.subplot(7, 1, 3, sharex=ax1)
+        		ax.set_ylim([-1.5, 1.5])
+        		plt.plot(x[index_low:index_high], peaks_cleaned[index_low:index_high])
+        		plt.plot(x[index_low:index_high], -qrs_peaks[index_low:index_high], 'r')
+        		plt.title("Beats")
+        
+        		ax = plt.subplot(7, 1, 4, sharex=ax1)
+        		plt.plot(x[index_low:index_high], passed[index_low:index_high])
+        		plt.title("Low-pass @1.5Hz")
+        
+        		ax = plt.subplot(7, 1, 5, sharex=ax1)
+        		ax.set_ylim([-3, 3])
+        		plt.plot(x[index_low:index_high], peaks_indexed[index_low:index_high], alpha=0.4)
+        		plt.plot(x[index_low:index_high], passed_filtered[index_low:index_high], 'g')
+        		plt.plot(x[index_low:index_high], -qrs_peaks_indexed[index_low:index_high], 'r', alpha=0.4)
+        		plt.title("Beats and low-passed signal")
+        	
+        		ax = plt.subplot(7, 1, 6, sharex=ax1)
+        		ax.set_ylim([-3, 4])
+        		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
+        		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
+        		plt.legend(loc=4, fontsize=5, ncol=2)
+        		plt.grid()
+        		plt.title("Data quality indicator")
+        
+        		beat_int_filt_low = [n for n, j in enumerate(beat_int_x_filt) if j>(i/500)]
+        		beat_int_filt_high = [n for n, j in enumerate(beat_int_x_filt) if j<(i/500) + dx/500]
+        
+        		beat_int_low = [n for n, j in enumerate(beat_int_x) if j>(i/500)]
+        		beat_int_high = [n for n, j in enumerate(beat_int_x) if j<(i/500) + dx/500]
+        
+        		if len(beat_int_filt_low)>0 and len(beat_int_filt_high)>0:
+        			index_low_filt = beat_int_filt_low[0]
+        			index_high_filt = beat_int_filt_high[-1]
+        			index_low = beat_int_low[0]
+        			index_high = beat_int_high[-1]
+        			ax = plt.subplot(7, 1, 7, sharex=ax1)
+        			ax.set_ylim([0, 4])
+        			plt.plot(beat_int_x[index_low:index_high], beat_int_y[index_low:index_high], 'o', alpha=0.25)
+        			plt.plot(beat_int_x_filt[index_low_filt:index_high_filt], beat_int_y_filt[index_low_filt:index_high_filt], 'ob')
+        			plt.grid()
+        			plt.title("Beat frequencies")
+        
+        		pdf_pages.savefig(fig)
+        		fig.clf()
+        		plt.clf()
+        
+        	pdf_pages.close()
+        	print "\r\ndone"
 
-		index_low = i
-		index_high = min(i+dx, limit)
-
-		plt.rc('font', **{'size':'5'})
-
-		fig, axes = plt.subplots(nrows=6, ncols=1)
-		fig.tight_layout(pad=3.0, w_pad=4.0, h_pad=3.0)
-
-		ax1 = plt.subplot(7, 1, 1)
-		ax1.xaxis.set_major_formatter(plt.FuncFormatter(HMS))
-		ax1.set_ylim([-2*np.std(np.array(y)), 2*np.std(np.array(y))])
-		plt.plot(x[index_low:index_high], np.array(y[index_low:index_high]))
-
-		plt.title("Raw signal")
-	
-		ax = plt.subplot(7, 1, 2, sharex=ax1)
-		ax.set_ylim([-0.1, 5])
-		plt.plot(x[index_low:index_high], rmsd[index_low:index_high])
-		plt.title("RMSD")
-
-		ax = plt.subplot(7, 1, 3, sharex=ax1)
-		ax.set_ylim([-1, 2])
-		plt.plot(x[index_low:index_high], peaks_cleaned[index_low:index_high])
-		plt.title("Beats")
-
-		ax = plt.subplot(7, 1, 4, sharex=ax1)
-		plt.plot(x[index_low:index_high], passed[index_low:index_high])
-		plt.title("Low-pass @1.5Hz")
-
-		ax = plt.subplot(7, 1, 5, sharex=ax1)
-		ax.set_ylim([-3, 3])
-		plt.plot(x[index_low:index_high], peaks_indexed[index_low:index_high], alpha=0.4)
-		passed_filtered = np.clip(passed,-3, 3) * np.array(index)
-		plt.plot(x[index_low:index_high], passed_filtered[index_low:index_high], 'g')
-		plt.title("Beats and low-passed signal")
-	
-		ax = plt.subplot(7, 1, 6, sharex=ax1)
-		ax.set_ylim([-3, 4])
-		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
-		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
-		plt.legend(loc=4, fontsize=5, ncol=2)
-		plt.grid()
-		plt.title("Data quality indicator")
-
-		beat_int_filt_low = [n for n, j in enumerate(beat_int_x_filt) if j>(i/500)]
-		beat_int_filt_high = [n for n, j in enumerate(beat_int_x_filt) if j<(i/500) + dx/500]
-
-		beat_int_low = [n for n, j in enumerate(beat_int_x) if j>(i/500)]
-		beat_int_high = [n for n, j in enumerate(beat_int_x) if j<(i/500) + dx/500]
-
-		if len(beat_int_filt_low)>0 and len(beat_int_filt_high)>0:
-			index_low_filt = beat_int_filt_low[0]
-			index_high_filt = beat_int_filt_high[-1]
-			index_low = beat_int_low[0]
-			index_high = beat_int_high[-1]
-			ax = plt.subplot(7, 1, 7, sharex=ax1)
-			ax.set_ylim([0, 4])
-			plt.plot(beat_int_x[index_low:index_high], beat_int_y[index_low:index_high], 'o', alpha=0.25)
-			plt.plot(beat_int_x_filt[index_low_filt:index_high_filt], beat_int_y_filt[index_low_filt:index_high_filt], 'ob')
-			plt.grid()
-			plt.title("Beat frequencies")
-
-		pdf_pages.savefig(fig)
-		fig.clf()
-		plt.clf()
-
-	pdf_pages.close()
-	print "\r\ndone"
-
-	writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, passed, passed_filtered)
+	writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered)
 
 	
