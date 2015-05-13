@@ -368,8 +368,8 @@ if __name__ == "__main__":
         		ax = plt.subplot(7, 1, 5, sharex=ax1)
         		ax.set_ylim([-3, 3])
         		plt.plot(x[index_low:index_high], peaks_indexed[index_low:index_high], alpha=0.4)
-        		plt.plot(x[index_low:index_high], passed_filtered[index_low:index_high], 'g')
         		plt.plot(x[index_low:index_high], -qrs_peaks_indexed[index_low:index_high], 'r', alpha=0.4)
+        		plt.plot(x[index_low:index_high], passed_filtered[index_low:index_high], 'g')
         		plt.title("Beats and low-passed signal")
         	
         		ax = plt.subplot(7, 1, 6, sharex=ax1)
