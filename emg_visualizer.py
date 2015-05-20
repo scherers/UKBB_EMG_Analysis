@@ -44,10 +44,10 @@ class DataManager:
         return min(self.low_Idx()+self.dx+(2*self.overlap), self.file_length-1)
         
     def low_Xlimit(self):
-        return (self.pages[self.current_page-1]/500)-1
+        return (self.pages[self.current_page-1]/500)-self.overlap/500
         
     def high_Xlimit(self):
-        return ((self.pages[self.current_page-1]+self.dx)/500)+1
+        return ((self.pages[self.current_page-1]+self.dx)/500)+self.overlap/500
     
     def __init__(self, filename):
         infile = open(filename)
