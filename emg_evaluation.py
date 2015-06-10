@@ -219,8 +219,8 @@ if __name__ == "__main__":
 		pdf_file = ''.join(filename.split(".")[:-1]) + ".pdf"
 		print "pdf-file:", pdf_file
 
-		pdf_file_peakfitting = ''.join(filename.split(".")[:-1]) + "_peak_fitting.pdf"
-		print "pdf-file2:", pdf_file_peakfitting
+	pdf_file_peakfitting = ''.join(filename.split(".")[:-1]) + "_peak_fitting.pdf"
+	print "pdf-file2:", pdf_file_peakfitting
 
 	csv_out_file = ''.join(filename.split(".")[:-1]) + "_eval.csv"
 	print "csv-out-file:", csv_out_file
@@ -280,9 +280,8 @@ if __name__ == "__main__":
 			count += 1
 			th *= 0.9
 
-		if writePDF:
-			plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
-			plt.savefig(pdf_file_peakfitting)
+		plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
+		plt.savefig(pdf_file_peakfitting)
 	
 		slope = []
 		for i in range(0,len(n_peaks_vec)-1):
