@@ -7,6 +7,8 @@ import numpy as np
 from numpy.fft import fft, ifft, fftshift
 import copy
 
+import argparse
+
 
 def lowpass(data, cutoff):
 	fourier = fftshift(fft(np.array(data,dtype=float)))
@@ -199,13 +201,19 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_
 
 
 if __name__ == "__main__":
-	print 'Number of arguments:', len(sys.argv), 'arguments.'
-	print 'Argument List:', str(sys.argv)
-	
-	filename = sys.argv[1]
-	
-	#Flag for writing PDFs (or jusr CSV)
-	writePDF = True
+	#print 'Number of arguments:', len(sys.argv), 'arguments.'
+	#print 'Argument List:', str(sys.argv)
+
+	parser = argparse.ArgumentParser(description='Run EMG Analysis')
+	parser.add_argument('filename', metavar='Input File', type=str, nargs=1, help='Name of the input file (CSV-File)')
+	parser.add_argument('-l', '--limit', default=0, type=int, required=False)
+	parser.add_argument('-p', '--print_pdf', action='store_true', default=False, dest='boolean_switch_pdf', help='Set a switch to true')
+	args = parser.parse_args()
+
+	filename = args.filename[0]
+
+	#Flag for writing PDFs (or just CSV)
+	writePDF = args.boolean_switch_pdf
 
 	if writePDF:
 		pdf_file = ''.join(filename.split(".")[:-1]) + ".pdf"
@@ -219,8 +227,10 @@ if __name__ == "__main__":
 	
 	[y_raw, rmsd, x, usage_vec, t_string] = readData(filename)
 
-	limit_manual = min(int(30 * 60 * 500), len(y_raw))
-	limit_manual = len(y_raw)
+	limit_manual = min(int(args.limit * 60 * 500), len(y_raw))
+	if limit_manual == 0:
+		limit_manual = len(y_raw)
+
 	limit = 60 * 500 * (limit_manual / (60*500) )
 
 	y_raw = y_raw[:limit]
