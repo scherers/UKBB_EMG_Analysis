@@ -6,6 +6,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 from numpy.fft import fft, ifft, fftshift
 import copy
+from scipy.interpolate import interp1d
 
 import argparse
 
@@ -200,6 +201,26 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_
 	print "\r\ndone"
 
 
+def getBeatVectorsForInt(data_x, data_y):
+	result_x = [0]
+	result_y = [0]
+	for i in range(0,len(data_y)):
+		if data_y[i] == 1:
+			dx = 1000
+			for j in range(1,1000):
+				if  (i+j)<len(data_y) and data_y[i+j] == 1:
+					dx = j
+					break
+			if dx < 1000:
+				result_x.append(data_x[i])
+				result_y.append(1.0/(float(dx)/500))
+
+	result_x.append(beat_int_x[-1]+5)
+	result_y.append(beat_int_y[-1])
+	result_y[0] = result_y[1] - 0.1
+	return [result_x, result_y]
+
+
 if __name__ == "__main__":
 	#print 'Number of arguments:', len(sys.argv), 'arguments.'
 	#print 'Argument List:', str(sys.argv)
@@ -281,8 +302,7 @@ if __name__ == "__main__":
 			th *= 0.9
 
 		plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
-		plt.savefig(pdf_file_peakfitting)
-	
+			
 		slope = []
 		for i in range(0,len(n_peaks_vec)-1):
 			if n_peaks_vec[i] > 1:
@@ -290,6 +310,11 @@ if __name__ == "__main__":
 			else:
 				slope.append(100)
 		th = th_vec[slope.index(min(slope))]
+
+		ind = th_vec.index(th)
+		plt.plot(ind, n_peaks_vec[ind], 'o')
+		plt.savefig(pdf_file_peakfitting)
+
 	else:
 		print 'no values'
 		th = 1
@@ -327,10 +352,16 @@ if __name__ == "__main__":
 				beat_int_x.append(x[i])
 				beat_int_y.append(1.0/(float(dx)/500))
 
+	int_x_peak, int_y_peak = getBeatVectorsForInt(x, peaks_cleaned)
+	f_peak = interp1d(int_x_peak, int_y_peak)
+
 	qrs_beats = detectQRS(y)
 	qrs_peaks = np.zeros((1,len(y)), dtype=int)[0]
 	for q in qrs_beats:
          qrs_peaks[q] = 1
+
+	int_x_qrs, int_y_qrs = getBeatVectorsForInt(x, qrs_peaks)
+	f_qrs = interp1d(int_x_qrs, int_y_qrs)
 
 	qrs_peaks_indexed = np.array(index) * np.array(qrs_peaks)
 
@@ -389,24 +420,29 @@ if __name__ == "__main__":
         		plt.grid()
         		plt.title("Data quality indicator")
         
-        		beat_int_filt_low = [n for n, j in enumerate(beat_int_x_filt) if j>(i/500)]
-        		beat_int_filt_high = [n for n, j in enumerate(beat_int_x_filt) if j<(i/500) + dx/500]
+        		#beat_int_filt_low = [n for n, j in enumerate(beat_int_x_filt) if j>(i/500)]
+        		#beat_int_filt_high = [n for n, j in enumerate(beat_int_x_filt) if j<(i/500) + dx/500]
         
-        		beat_int_low = [n for n, j in enumerate(beat_int_x) if j>(i/500)]
-        		beat_int_high = [n for n, j in enumerate(beat_int_x) if j<(i/500) + dx/500]
+        		#beat_int_low = [n for n, j in enumerate(beat_int_x) if j>(i/500)]
+        		#beat_int_high = [n for n, j in enumerate(beat_int_x) if j<(i/500) + dx/500]
         
-        		if len(beat_int_filt_low)>0 and len(beat_int_filt_high)>0:
-        			index_low_filt = beat_int_filt_low[0]
-        			index_high_filt = beat_int_filt_high[-1]
-        			index_low = beat_int_low[0]
-        			index_high = beat_int_high[-1]
-        			ax = plt.subplot(7, 1, 7, sharex=ax1)
-        			ax.set_ylim([0, 4])
-        			plt.plot(beat_int_x[index_low:index_high], beat_int_y[index_low:index_high], 'o', alpha=0.25)
-        			plt.plot(beat_int_x_filt[index_low_filt:index_high_filt], beat_int_y_filt[index_low_filt:index_high_filt], 'ob')
-        			plt.grid()
-        			plt.title("Beat frequencies")
-        
+        		#if len(beat_int_filt_low)>0 and len(beat_int_filt_high)>0:
+        		#	index_low_filt = beat_int_filt_low[0]
+        		#	index_high_filt = beat_int_filt_high[-1]
+        		#	index_low = beat_int_low[0]
+        		#	index_high = beat_int_high[-1]
+        		#	ax = plt.subplot(7, 1, 7, sharex=ax1)
+        		#	ax.set_ylim([0, 4])
+        		#	plt.plot(beat_int_x[index_low:index_high], beat_int_y[index_low:index_high], 'o', alpha=0.25)
+        		#	plt.plot(beat_int_x_filt[index_low_filt:index_high_filt], beat_int_y_filt[index_low_filt:index_high_filt], 'ob')
+        		#	plt.grid()
+			#	plt.title("Beat frequencies")
+
+			ax = plt.subplot(7, 1, 7, sharex=ax1)
+			ax.set_ylim([0, 5])
+			plt.plot(x[index_low:index_high], f_peak(x[index_low:index_high]), alpha=0.4)
+			plt.plot(x[index_low:index_high], f_qrs(x[index_low:index_high]), 'g', alpha=0.4)
+
         		pdf_pages.savefig(fig)
         		fig.clf()
         		plt.clf()
