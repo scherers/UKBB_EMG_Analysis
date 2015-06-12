@@ -175,12 +175,17 @@ def getTimeString(t):
 	return str(hours) + ":" + str(minutes) + ":" + str(seconds)
 
 
-def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_beat, lp_all, lp_filtered):
+def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_beat, lp_all, lp_filtered, ibint_peak, ibint_qrs, ibint_tacho=None):
 	outfile = open(filename, 'w')
 
 	print "writing output"
 	
-	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","qrs_beat","lp_all","lp_filtered"\r\n'
+	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","qrs_beat","lp_all","lp_filtered","ibint_peak","ibint_qrs"'
+
+	if ibint_tacho != None:
+		header += ',"ibint_tacho"'
+
+	header += '\r\n'
 	outfile.write(header)
 
 	for i in range(0,len(time_as_string)):
@@ -195,7 +200,14 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_
 		result += str(beat[i]) + ","
 		result += str(qrs_beat[i]) + ","
 		result += str(lp_all[i]) + ","
-		result += str(lp_filtered[i]) + "\r\n"
+		result += str(lp_filtered[i]) + ","
+		result += str(ibint_peak[i]) + ","
+		result += str(ibint_qrs[i])
+		
+		if ibint_tacho != None:
+			result += "," + str(ibint_tacho[i])
+		
+		result += "\r\n"
 		outfile.write(result)
 	outfile.close()
 	print "\r\ndone"
@@ -480,6 +492,9 @@ if __name__ == "__main__":
         	pdf_pages.close()
         	print "\r\ndone"
 
-	writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered)
+	if args.extra_file != '':
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), f_hf(x))
+	else:
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x))
 
 	
