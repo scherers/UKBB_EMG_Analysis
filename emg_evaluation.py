@@ -221,6 +221,21 @@ def getBeatVectorsForInt(data_x, data_y):
 	return [result_x, result_y]
 
 
+def extractHFFromFile(filename):
+	infile = open(filename)
+	infile.readline()
+	x = []
+	y = []
+	count = 0
+	for l in infile:
+		tmp = l.split(',')
+		x.append(count/5.0)
+		y.append(float(tmp[2])/60.0)
+		count += 1
+	infile.close()
+	return [x,y]
+
+
 if __name__ == "__main__":
 	#print 'Number of arguments:', len(sys.argv), 'arguments.'
 	#print 'Argument List:', str(sys.argv)
@@ -229,7 +244,11 @@ if __name__ == "__main__":
 	parser.add_argument('filename', metavar='Input File', type=str, nargs=1, help='Name of the input file (CSV-File)')
 	parser.add_argument('-l', '--limit', default=0, type=int, required=False)
 	parser.add_argument('-p', '--print_pdf', action='store_true', default=False, dest='boolean_switch_pdf', help='Set a switch to true')
+	parser.add_argument('-hf', '--extra-file', default='', type=str, required=False)
 	args = parser.parse_args()
+
+	if args.extra_file != '':
+		print "extra input file given:", args.extra_file
 
 	filename = args.filename[0]
 
@@ -247,6 +266,11 @@ if __name__ == "__main__":
 	print "csv-out-file:", csv_out_file
 	
 	[y_raw, rmsd, x, usage_vec, t_string] = readData(filename)
+
+	if args.extra_file != '':
+		[hf_x, hf_y] = extractHFFromFile(args.extra_file)
+		f_hf = interp1d(hf_x, hf_y)
+	
 
 	limit_manual = min(int(args.limit * 60 * 500), len(y_raw))
 	if limit_manual == 0:
@@ -439,9 +463,15 @@ if __name__ == "__main__":
 			#	plt.title("Beat frequencies")
 
 			ax = plt.subplot(7, 1, 7, sharex=ax1)
-			ax.set_ylim([0, 5])
-			plt.plot(x[index_low:index_high], f_peak(x[index_low:index_high]), alpha=0.4)
-			plt.plot(x[index_low:index_high], f_qrs(x[index_low:index_high]), 'g', alpha=0.4)
+			ax.set_ylim([-1, 5])
+			plt.plot(x[index_low:index_high], f_peak(x[index_low:index_high]), alpha=0.4, label='IBInt-Peak')
+			plt.plot(x[index_low:index_high], f_qrs(x[index_low:index_high]), 'g', alpha=0.4, label='IBInt-QRS')
+			
+			if args.extra_file != '':
+				plt.plot(x[index_low:index_high], f_hf(x[index_low:index_high]), 'r', alpha=0.4, label='IBInt-CardioTach')
+			
+			plt.grid()
+        		plt.legend(loc=4, fontsize=5, ncol=3)
 
         		pdf_pages.savefig(fig)
         		fig.clf()
