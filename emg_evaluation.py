@@ -7,6 +7,7 @@ import numpy as np
 from numpy.fft import fft, ifft, fftshift
 import copy
 from scipy.interpolate import interp1d
+from scipy import signal
 
 import argparse
 
@@ -247,6 +248,25 @@ def extractHFFromFile(filename):
 	infile.close()
 	return [x,y]
 
+def getDiffVec(v1, v2, v3):
+	result = []
+	for i in range(0,len(v1)):
+		tmp = []
+		tmp.append(abs(v1[i]-v2[i]))
+		#tmp.append(abs(v2[i]-v3[i]))
+		tmp.append(abs(v1[i]-v3[i]))
+		tmp = sorted(tmp)
+		result.append(tmp[0])
+	return result
+
+def getUsageVec(vec_in, th, delta):
+	result = list(np.ones(len(vec_in)))
+	for i in range(0,len(vec_in)):
+		if vec_in[i] > th:
+			for j in range(max(0,i-delta),min(i+delta,len(vec_in))):
+				result[j] = 0
+	return result
+
 
 if __name__ == "__main__":
 	#print 'Number of arguments:', len(sys.argv), 'arguments.'
@@ -315,7 +335,7 @@ if __name__ == "__main__":
 	usage_vec = usage_vec[:limit]
 	t_string = t_string[:limit]
 
-	delta = 2500	
+	delta = 4000	
 	index = thresholdRMSD(rmsd, rmsd_cutoff, delta)
 
 	peak_clean_range = int(500 / 5)
@@ -401,6 +421,15 @@ if __name__ == "__main__":
 
 	qrs_peaks_indexed = np.array(index) * np.array(qrs_peaks)
 
+	print "preparing vecs"
+	v1 = f_peak(x)
+	v2 = f_qrs(x)
+	v3 = f_hf(x)
+	v4 = getDiffVec(v1, v2, v3)
+	v5 = signal.medfilt(v4,201)
+	v6 = getUsageVec(v5, 0.25, 2000)
+	print "vecs ready"
+
 	if writePDF:
 		print "writing plots"
 		pdf_pages = PdfPages(pdf_file)	
@@ -438,8 +467,12 @@ if __name__ == "__main__":
         		plt.title("Beats")
         
         		ax = plt.subplot(7, 1, 4, sharex=ax1)
-        		plt.plot(x[index_low:index_high], passed[index_low:index_high])
-        		plt.title("Low-pass @1.5Hz")
+			ax.set_ylim([-1, 3])
+        		#plt.plot(x[index_low:index_high], passed[index_low:index_high])
+			plt.plot(x[index_low:index_high], v5[index_low:index_high])
+			plt.grid()
+        		#plt.title("Low-pass @1.5Hz")
+			plt.title("IBI Similarity Measurement")
         
         		ax = plt.subplot(7, 1, 5, sharex=ax1)
         		ax.set_ylim([-3, 3])
@@ -449,10 +482,11 @@ if __name__ == "__main__":
         		plt.title("Beats and low-passed signal")
         	
         		ax = plt.subplot(7, 1, 6, sharex=ax1)
-        		ax.set_ylim([-3, 4])
+        		ax.set_ylim([-3, 6])
+			plt.plot(x[index_low:index_high], np.array(v6[index_low:index_high]) + 4*np.ones(dx), label='IBI Usage Vec')
         		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
         		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
-        		plt.legend(loc=4, fontsize=5, ncol=2)
+        		plt.legend(loc=4, fontsize=5, ncol=3)
         		plt.grid()
         		plt.title("Data quality indicator")
         
@@ -476,12 +510,13 @@ if __name__ == "__main__":
 
 			ax = plt.subplot(7, 1, 7, sharex=ax1)
 			ax.set_ylim([-1, 5])
-			plt.plot(x[index_low:index_high], f_peak(x[index_low:index_high]), alpha=0.4, label='IBInt-Peak')
-			plt.plot(x[index_low:index_high], f_qrs(x[index_low:index_high]), 'g', alpha=0.4, label='IBInt-QRS')
+			#ax.set_ylim([2.2, 2.6])
+			plt.plot(x[index_low:index_high], v1[index_low:index_high], alpha=0.4, label='IBInt-Peak')
+			plt.plot(x[index_low:index_high], v2[index_low:index_high], 'g', alpha=0.4, label='IBInt-QRS')
 			
 			if args.extra_file != '':
-				plt.plot(x[index_low:index_high], f_hf(x[index_low:index_high]), 'r', alpha=0.4, label='IBInt-CardioTach')
-			
+				plt.plot(x[index_low:index_high], v3[index_low:index_high], 'r', alpha=0.4, label='IBInt-CardioTach')
+
 			plt.grid()
         		plt.legend(loc=4, fontsize=5, ncol=3)
 
