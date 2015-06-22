@@ -7,17 +7,19 @@ import os.path
 
 if sys.version_info[0] < 3:
     import Tkinter as Tk
+    import ttk
     from tkFileDialog import askopenfilename
     from tkMessageBox import showerror, askyesno
 else:
     import tkinter as Tk
+    from tkinter import ttk
     from tkinter.filedialog import askopenfilename
     from tkinter.messagebox import showerror, askyesno
 
 import matplotlib
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from matplotlib.widgets import SpanSelector
+import matplotlib.patches as mpatches
+from matplotlib.widgets import SpanSelector, MultiCursor
 matplotlib.use('TkAgg')
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -30,6 +32,9 @@ class DataManager:
     file_length = 0
     header_line = ''
     data_lines = []
+    
+    plot_columns = []
+    usage_columns = []
     
     dx = 60 * 500
     overlap = 500
@@ -50,41 +55,72 @@ class DataManager:
         return ((self.pages[self.current_page-1]+self.dx)/500)+self.overlap/500
     
     def __init__(self, filename):
-        infile = open(filename)
-        self.header_line = infile.readline()
-        self.header_columns = self.header_line.split(",")
-        self.data_lines = infile.readlines()
-        self.file_length = len(self.data_lines)
+        self.infile = open(filename)
+        self.header_line = self.infile.readline()
+        self.header_columns = self.header_line.rstrip('\r\n').split(",")
+
+        for item in self.header_columns:
+            if item == '"time"':
+                continue
+            elif item.startswith('"usage_'):
+                self.usage_columns.append(item)
+            else:
+                self.plot_columns.append(item)
         
+
+    def readData(self, plot_cols, usage_cols, progress_label, usg_manual_col):
+        # Zerobased counting of columns (First column = 0)
+        del_usage_manual_col = -1
+        if '"usage_manual"' in self.header_columns:
+            del_usage_manual_col = self.header_columns.index('"usage_manual"')
+        plot_data = []
+        for i in range(0,len(plot_cols)):
+            plot_data.append([])
+        usage_data = []
+        for i in range(0,len(usage_cols)):
+            usage_data.append([])
+        usage_manual = []
+        time_axis = []
+        count = 0
+        self.data_lines = []
+        # TODO check data_lines saving (and usage_manual column removal)
+        for l in self.infile:
+            tmp = l.rstrip('\r\n').split(",")
+            for p in range(0,len(plot_cols)):
+                plot_data[p].append(float(tmp[plot_cols[p]]))
+            for u in range(0,len(usage_cols)):
+                usage_data[u].append(int(tmp[usage_cols[u]]))
+            if usg_manual_col >= 0:
+                usage_manual.append(int(tmp[usg_manual_col]))
+            else:
+                usage_manual.append(1)
+            time_axis.append(count/500.0)
+            count += 1
+            if del_usage_manual_col > -1:
+                del tmp[del_usage_manual_col]
+                self.data_lines.append(','.join(tmp)+'\r\n')
+            else:
+                self.data_lines.append(l)
+            if count%(500*60) == 0:
+                progress_label['text'] = 'loading ... ({} minutes loaded)'.format(count/500/60)
+                progress_label.update()
+
+        self.file_length = len(self.data_lines)
+
         self.pages = range(0, self.file_length, self.dx)
         self.num_pages = len(self.pages)
 
-    def readData(self, col1, col2, col_motion, col_rmsd):
-        # Zerobased counting of columns (First column = 0)
-        data1 = []
-        data2 = []
-        motion_usage = []
-        rmsd_usage = []
-        time_axis = []
-        count = 0
-        for l in self.data_lines:
-            tmp = l.split(",")
-            data1.append(float(tmp[col1]))
-            data2.append(float(tmp[col2]))
-            motion_usage.append(int(tmp[col_motion]))
-            rmsd_usage.append(int(tmp[col_rmsd]))
-            time_axis.append(count/500.0)
-            count += 1
-
         print("reading done")
-        return [time_axis, data1, data2, motion_usage, rmsd_usage]
+        progress_label['text'] = 'loading done, preparing plots ...'
+        progress_label.update()
+        return [time_axis, plot_data, usage_data, np.array(usage_manual)]
 
     def writeCSV(self, filename, manual_usg):
         outfile = open(filename, 'w')
     
         print("writing output")
         
-        header = '{},"manual_usage"\r\n'.format(self.header_line.rstrip('\r\n'))
+        header = '{},"usage_manual"\r\n'.format(self.header_line.rstrip('\r\n'))
         outfile.write(header)
     
         for i in range(0,self.file_length):
@@ -106,15 +142,16 @@ class VisualizerWindow:
     fig = []
     ax1 = []
     ax2 = []
-    ax3 = []    
+    ax3 = []
+    ax4 = []
+    
+    ylim_ax1 = []
+    ylim_ax2 = []
+    ylim_ax3 = []
     
     #data
     x = []
-    y = []
-    rmsd = []
-    md_usage = []
-    rmsd_usage = []
-    manual_usage = []   
+    usage_manual = []   
     
     #debug
     show_debug_msg = False
@@ -136,50 +173,106 @@ class VisualizerWindow:
              if not filename:
                  sys.exit(0)
         
-        self.dataMgr = DataManager(filename)        
+        self.root.wm_title("EMG-Visualization-Tool: {}".format(filename))
+        self.dataMgr = DataManager(filename)     
         
         self.csv_out_file = ''.join(filename.split(".")[:-1]) + "_usage.csv"
-        print("csv-out-file:".format(self.csv_out_file))
+        print("csv-out-file: {}".format(self.csv_out_file))
         
-        emg_col = self.dataMgr.header_columns.index('"f"')
-        rmsd_col = self.dataMgr.header_columns.index('"rmsd"')
-        md_usage_col = self.dataMgr.header_columns.index('"usage_md"')
-        rmsd_usage_col = self.dataMgr.header_columns.index('"usage_rmsd"')
         
-        [self.x, self.y, self.rmsd, self.md_usage, self.rmsd_usage] = self.dataMgr.readData(emg_col,rmsd_col,md_usage_col,rmsd_usage_col)
-    
-        self.manual_usage = np.array(self.rmsd_usage[:])
+        
+        
+        self.configFrame = Tk.Frame(self.root, height=500, width=400)
+
+        Tk.Label(self.configFrame, text="\r\nPlot 1").pack()
+        self.plot1_select = ttk.Combobox(self.configFrame, values=self.dataMgr.plot_columns, state="readonly")
+        self.plot1_select.pack()
+        
+        if '"f"' in self.dataMgr.plot_columns:
+            self.plot1_select.current(self.dataMgr.plot_columns.index('"f"'))
+        
+
+        Tk.Label(self.configFrame, text="Plot 2").pack()
+        self.plot2_select = ttk.Combobox(self.configFrame, values=self.dataMgr.plot_columns, state="readonly")
+        self.plot2_select.pack()
+
+        if '"rmsd"' in self.dataMgr.plot_columns:
+            self.plot2_select.current(self.dataMgr.plot_columns.index('"rmsd"'))
+
+        
+        Tk.Label(self.configFrame, text="Plot 3").pack()
+        self.plot3_select = ttk.Combobox(self.configFrame, values=self.dataMgr.plot_columns, state="readonly")
+        self.plot3_select.pack()
+
+        if '"beat"' in self.dataMgr.plot_columns:
+            self.plot3_select.current(self.dataMgr.plot_columns.index('"beat"'))  
+        
+        
+        Tk.Label(self.configFrame, text="\r\nUsage Plot").pack()
+
+        usage_plots = {}
+
+        for usg in self.dataMgr.usage_columns:
+            if not usg == '"usage_manual"':
+                chkbx_var = Tk.IntVar()
+                chkbx_var.set(1)
+                usg_check = ttk.Checkbutton(self.configFrame, text=usg, variable=chkbx_var)
+                usg_check.pack()
+                usage_plots[usg] = chkbx_var
+        
+
+        self.usage_plots = usage_plots
+        
+        Tk.Label(self.configFrame, text="\r\nLoad/copy \"usage_manual\" from").pack()
+        self.usg_man_select = ttk.Combobox(self.configFrame, values=self.dataMgr.usage_columns, state="readonly")
+        self.usg_man_select.pack()
+        
+        if '"usage_manual"' in self.dataMgr.usage_columns:
+            self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_manual"'))
+        elif '"usage_rmsd"' in self.dataMgr.usage_columns:
+            self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_rmsd"'))
+        
+        Tk.Label(self.configFrame, text="").pack()
+
+        button_continue = Tk.Button(self.configFrame, text='Continue', command=self._CfgContinue)
+        button_continue.pack()
+        
+        Tk.Label(self.configFrame, text="").pack()
+        self.loading_label = Tk.Label(self.configFrame, text="")
+        self.loading_label.pack()
+        
+        self.configFrame.pack()
+        
 
 
-        self.root.wm_title("EMG-Visualization-Tool: {}".format(filename))
+        self.visualizerFrame = Tk.Frame(self.root)
         
-        self.fig = plt.figure(figsize=(17,8), dpi=80, tight_layout=True)     
-        canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        
+        # Figure with Subplots
+        self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, 
+            gridspec_kw = dict(height_ratios=[3,2,2,1]),
+            figsize=(16,7.5), dpi=80, tight_layout=True)        
+        
+        canvas = FigureCanvasTkAgg(self.fig, master=self.visualizerFrame)
         canvas.show()
         canvas.mpl_connect('key_press_event', self.on_key_event)
-     
-        print("displaying plots")
-    
-        # Graphs
-        gs = gridspec.GridSpec(3,1,
-                       height_ratios=[2,2,1]
-                       )
-
-        self.ax1 = plt.subplot(gs[0])
-        self.ax2 = plt.subplot(gs[1], sharex=self.ax1)
-        self.ax3 = plt.subplot(gs[2], sharex=self.ax1)
-        self.plotPage()
+        canvas.mpl_connect('button_press_event', self.on_button_event)
     
         # GUI Elements
-        self.progress_label = Tk.Label(self.root, text="Page {}/{}".format(self.dataMgr.current_page, self.dataMgr.num_pages))
+        self.mode_label = Tk.Label(self.visualizerFrame, text="Mode: ADD", background="green")
     
-        self.button_prev = Tk.Button(master=self.root, text='Prev', command=self._prev)
-        self.button_next = Tk.Button(master=self.root, text='Next', command=self._next)
+        self.progress_label = Tk.Label(self.visualizerFrame, text="Page {}/{}".format(self.dataMgr.current_page, self.dataMgr.num_pages))
     
-        self.button_add = Tk.Button(master=self.root, text='Add', command=self._add)
-        self.button_del = Tk.Button(master=self.root, text='Del', command=self._del)
-        self.button_save = Tk.Button(master=self.root, text='Save', command=self._save)
-        self.button_quit = Tk.Button(master=self.root, text='Quit', command=self._quit)
+        button_prev = Tk.Button(master=self.visualizerFrame, text='Prev', command=self._prev)
+        button_next = Tk.Button(master=self.visualizerFrame, text='Next', command=self._next)
+    
+        button_zoom_in = Tk.Button(master=self.visualizerFrame, text='Zoom In', command=self._zoom_in)
+        button_zoom_out = Tk.Button(master=self.visualizerFrame, text='Zoom Out', command=self._zoom_out)    
+    
+        button_add = Tk.Button(master=self.visualizerFrame, text='Add', command=self._add)
+        button_del = Tk.Button(master=self.visualizerFrame, text='Del', command=self._del)
+        button_save = Tk.Button(master=self.visualizerFrame, text='Save', command=self._save)
+        button_quit = Tk.Button(master=self.visualizerFrame, text='Quit', command=self._quit)
         
         # Selection
         self.span1 = SpanSelector(self.ax1, self.onselectAdd, 'horizontal', useblit=True,
@@ -188,20 +281,64 @@ class VisualizerWindow:
                         rectprops=dict(alpha=0.5, facecolor='green') )
         self.span3 = SpanSelector(self.ax3, self.onselectAdd, 'horizontal', useblit=True,
                         rectprops=dict(alpha=0.5, facecolor='green') )
+        self.span4 = SpanSelector(self.ax4, self.onselectAdd, 'horizontal', useblit=True,
+                        rectprops=dict(alpha=0.5, facecolor='green') )
 
         # GUI Layout
-        self.button_prev.grid(column=0, row=0)
-        self.button_next.grid(column=3, row=0)
-        self.progress_label.grid(column=1, row=0, columnspan=2)
-        canvas.get_tk_widget().grid(column=0, row=1, columnspan=4)
-        canvas._tkcanvas.grid(column=0, row=1, columnspan=4)
-        self.button_add.grid(column=0, row=2)
-        self.button_del.grid(column=1, row=2)
-        self.button_save.grid(column=2, row=2)
-        self.button_quit.grid(column=3, row=2)
+        button_zoom_in.grid(column=0, row=0)
+        button_zoom_out.grid(column=1, row=0)
+        button_prev.grid(column=3, row=0)
+        self.progress_label.grid(column=4, row=0)
+        button_next.grid(column=5, row=0)
+        canvas.get_tk_widget().grid(column=0, row=1, columnspan=6)
+        canvas._tkcanvas.grid(column=0, row=1, columnspan=6)
+        button_add.grid(column=0, row=2)
+        button_del.grid(column=1, row=2)
+        self.mode_label.grid(column=2, row=2, columnspan=2)
+        button_save.grid(column=4, row=2)
+        button_quit.grid(column=5, row=2)
     
         Tk.mainloop()       
+
+
+    def _CfgContinue(self):
+        self.loading_label['text'] = 'loading ...'
+        self.loading_label.update()
         
+        self.plot_names = [self.plot1_select.get(),
+                      self.plot2_select.get(),
+                      self.plot3_select.get()]
+        
+        self.plot_cols = []              
+        for pn in self.plot_names:
+            self.plot_cols.append(self.dataMgr.header_columns.index(pn))
+
+        self.usage_names = []
+        self.usage_cols = []
+        for k,v in self.usage_plots.iteritems():
+            if v.get() == 1:
+                self.usage_names.append(k)
+                self.usage_cols.append(self.dataMgr.header_columns.index(k))
+        
+        if self.usg_man_select.get() in self.dataMgr.header_columns:
+            usg_manual_col = self.dataMgr.header_columns.index(self.usg_man_select.get())
+        else:
+            usg_manual_col = -1
+        
+        [self.x, self.plot_data, self.usage_data, self.usage_manual] = self.dataMgr.readData(self.plot_cols,self.usage_cols,self.loading_label, usg_manual_col)
+
+        self.configFrame.pack_forget()
+        self.visualizerFrame.pack()
+
+        print("displaying plots")
+        
+        self.ylim_ax1 = self.calc_ylims(self.plot_data[0])
+        self.ylim_ax2 = self.calc_ylims(self.plot_data[1])
+        self.ylim_ax3 = self.calc_ylims(self.plot_data[2])
+        
+        self.plotPage()
+
+
 
     def HMS(seconds, pos):
         """Customized x-axis ticks 
@@ -220,6 +357,30 @@ class VisualizerWindow:
                 return "%ds" % (seconds)
             return "%dm%02ds" % (minutes, seconds)
         return "%dh%02dm" % (hours, minutes)
+        
+        
+    def calc_ylims(self, data):
+        [cnt, edge] = np.histogram(data, 25)
+        s = len(data)
+        thres = 0.975*s
+        i = 0
+        j = len(cnt)-1
+        while True:
+            if cnt[i] < cnt[j]:
+                if s-cnt[i] < thres:
+                    break
+                else:
+                    s -= cnt[i]
+                    i += 1
+            else:
+                if s-cnt[j] < thres:
+                    break
+                else:
+                    s -= cnt[j]
+                    j -= 1
+        
+        return [min(0, edge[i]), max(1, edge[j+1])]
+
 
     def plotPage(self):
         index_low = self.dataMgr.low_Idx()
@@ -230,72 +391,50 @@ class VisualizerWindow:
     
         self.ax1.clear()
         self.ax1.xaxis.set_major_formatter(plt.FuncFormatter(self.HMS))
-        self.ax1.plot(self.x[index_low:index_high], np.array(self.y[index_low:index_high]))
-        self.ax1.set_ylim([-2*np.std(np.array(self.y)), 2*np.std(np.array(self.y))])
-        self.ax1.set_title("Raw signal")
+        self.ax1.plot(self.x[index_low:index_high], np.array(self.plot_data[0][index_low:index_high]))
+        self.ax1.set_ylim(self.ylim_ax1)
+        self.ax1.set_title(self.plot_names[0])
         
         self.ax2.clear()
-        self.ax2.plot(self.x[index_low:index_high], self.rmsd[index_low:index_high])
-        self.ax2.set_ylim([-0.1, 5])
-        self.ax2.set_title("RMSD")
+        self.ax2.plot(self.x[index_low:index_high], self.plot_data[1][index_low:index_high])
+        self.ax2.set_ylim(self.ylim_ax2)
+        self.ax2.set_title(self.plot_names[1])
         
-        self.plotAx3()
+        self.ax3.clear()
+        self.ax3.plot(self.x[index_low:index_high], self.plot_data[2][index_low:index_high])
+        self.ax3.set_ylim(self.ylim_ax3)
+        self.ax3.set_title(self.plot_names[2])
+        
+        self.plotUsages()
         
         self.fig.canvas.draw()
         
     
-    def plotAx3(self):
+    def plotUsages(self):
         index_low = self.dataMgr.low_Idx()
         index_high = self.dataMgr.high_Idx()
+        
+        self.ax4.clear()
+        self.ax4.set_ylim(0,len(self.usage_names)+2)
+        self.ax4.set_yticks([], minor=False)     
+        
+        colors = ['#483D8B', '#228B22', '#B22222', '#8A2BE2', '#808000', '#FF4500', '#DA70D6', '#FFA500']
+                
+        self.ax4.fill_between(self.x[index_low:index_high], 0, (len(self.usage_names)+2)*np.array(self.usage_manual[index_low:index_high]), facecolor='#7fbf7f', edgecolor='None')
+        
+        for u in range(0,len(self.usage_data)):
+            self.ax4.fill_between(self.x[index_low:index_high], u, u+np.array(self.usage_data[u][index_low:index_high]), facecolor=colors[u], edgecolor='None')
 
-        if self.show_debug_msg:
-            print("plotAx3: index_low: {} | index_high: {}".format(index_low, index_high))
-        diff_vec = np.diff(self.manual_usage[index_low:index_high])
-        starts = np.nonzero(diff_vec>0)[0]+index_low
-        ends = np.nonzero(diff_vec<0)[0]+index_low           
-        if self.manual_usage[index_low] == 1:
-            starts = np.insert(starts, 0, 0)
-        if self.manual_usage[index_high-1] == 1:
-            ends = np.append(ends, index_high-1)
+        patches = [mpatches.Patch(color='green', alpha=0.5, label='usage_manual')]
         
-        diff_vecM = np.diff(self.md_usage[index_low:index_high])
-        startsM = np.nonzero(diff_vecM>0)[0]+index_low
-        endsM = np.nonzero(diff_vecM<0)[0]+index_low
-        if self.md_usage[index_low] == 1:
-            startsM = np.insert(startsM, 0, 0)
-        if self.md_usage[index_high-1] == 1:
-            endsM = np.append(endsM, index_high-1)
-        
-        diff_vecR = np.diff(self.rmsd_usage[index_low:index_high])
-        startsR = np.nonzero(diff_vecR>0)[0]+index_low
-        endsR = np.nonzero(diff_vecR<0)[0]+index_low
-        if self.rmsd_usage[index_low] == 1:
-            startsR = np.insert(startsR, 0, 0)
-        if self.rmsd_usage[index_high-1] == 1:
-            endsR = np.append(endsR, index_high-1)
+        for i in range(0,len(self.usage_names)):
+            patches.append(mpatches.Patch(color=colors[i], label=self.usage_names[i]))
 
-        
-        self.ax3.clear()
-        self.ax3.set_title("Data quality indicator")
-        self.ax3.set_ylim(0,1)
-        
-        for s in range(0, len(starts)):
-            if self.show_debug_msg:
-                print("%\t axvspan: {} - {}".format(float(starts[s])/500, float(ends[s])/500))
-            self.ax3.axvspan(float(starts[s])/500, float(ends[s])/500, color='green', alpha=0.5)
-            
-        for r in range(0, len(startsR)):
-            if self.show_debug_msg:
-                print("%\t axvspanR: {} - {}".format(float(startsR[r])/500, float(endsR[r])/500))
-            self.ax3.axvspan(float(startsR[r])/500, float(endsR[r])/500, ymin=0.1, ymax=0.2, color='green')
-            
-        for m in range(0, len(startsM)):
-            if self.show_debug_msg:
-                print("%\t axvspanM: {} - {}".format(float(startsM[m])/500, float(endsM[m])/500))
-            self.ax3.axvspan(float(startsM[m])/500, float(endsM[m])/500, ymin=0, ymax=0.1, color='blue')
-            
+        plt.legend(bbox_to_anchor=(0., 1.0, 1., .102), loc=3,
+           ncol=5, mode="expand", borderaxespad=0., handles=patches)
+
         self.ax1.set_xlim(self.dataMgr.low_Xlimit(),self.dataMgr.high_Xlimit())
-        
+
     
     def onselectAdd(self, xmin, xmax):
         minIdx = max(0, round(xmin*500))
@@ -304,10 +443,11 @@ class VisualizerWindow:
             print("ADD: xmin: {} | xmax: {}".format(xmin, xmax))
             print("ADD: minIdx: {} | maxIdx: {}".format(minIdx, maxIdx))
 
-        self.manual_usage[minIdx:maxIdx] = 1
-        self.plotAx3()
+        self.usage_manual[minIdx:maxIdx] = 1
+        self.plotUsages()
         self.fig.canvas.draw()
-        
+
+
     def onselectDel(self, xmin, xmax):
         minIdx = max(0, round(xmin*500))
         maxIdx = min(self.dataMgr.file_length-1, round(xmax*500))
@@ -315,15 +455,36 @@ class VisualizerWindow:
             print("DEL: xmin: {} | xmax: {}".format(xmin, xmax))
             print("DEL: minIdx: {} | maxIdx: {}".format(minIdx, maxIdx))
         
-        self.manual_usage[minIdx:maxIdx] = 0
-        self.plotAx3()
+        self.usage_manual[minIdx:maxIdx] = 0
+        self.plotUsages()
+        self.fig.canvas.draw()
+
+
+    def onselectZoom(self, xmin, xmax):
+        if self.show_debug_msg:
+            print("ZOOM: xmin: {} | xmax: {}".format(xmin, xmax))
+        
+        self.plotUsages()
+        self.ax1.set_xlim(xmin,xmax)
         self.fig.canvas.draw()
     
     
     def on_key_event(self, event):
         if self.show_debug_msg:
             print('you pressed %s'%event.key)
-        if event.key == 's':
+        if event.key == 'a':
+            self._prev()
+        elif event.key == 'd':
+            self._next()
+        elif event.key == 'w':
+            self._add()
+        elif event.key == 's':
+            self._del()
+        elif event.key == 'q':
+            self._zoom_in()
+        elif event.key == 'e':
+            self._zoom_out()
+        elif event.key == 'r':
             self._save()
         elif event.key == 'left':
             self._prev()
@@ -333,7 +494,17 @@ class VisualizerWindow:
             self._add()
         elif event.key == 'down':
             self._del()
-    
+            
+
+    def on_button_event(self, event):
+        if self.show_debug_msg:
+            print('you clicked %s'%event.button)
+        if event.button == 3:   #right mouse button
+            self._zoom_out()
+        elif event.button == 2: #middle mouse button (scroll wheel)
+            self._zoom_in()
+
+
     def _quit(self):
         self.root.quit()     # stops mainloop
         self.root.destroy()  # this is necessary on Windows to prevent
@@ -348,7 +519,8 @@ class VisualizerWindow:
                 print(self.dataMgr.current_page)
             self.plotPage()
             self.progress_label["text"] ="Page {}/{}".format(self.dataMgr.current_page, self.dataMgr.num_pages)
-    
+
+
     def _next(self):
         if self.show_debug_msg:
             print('next()')
@@ -358,29 +530,70 @@ class VisualizerWindow:
                 print(self.dataMgr.current_page)
             self.plotPage()
             self.progress_label["text"] ="Page {}/{}".format(self.dataMgr.current_page, self.dataMgr.num_pages)
-    
+
+
     def _add(self):
         if self.show_debug_msg:
             print('_add()')
-        self.span1 = SpanSelector(self.ax1, self.onselectAdd, 'horizontal', useblit=True,
+        self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='g', lw=1)
+        self.span1 = SpanSelector(self.ax1, self.onselectAdd, 'horizontal', useblit=False,
                         rectprops=dict(alpha=0.5, facecolor='green') )
-        self.span2 = SpanSelector(self.ax2, self.onselectAdd, 'horizontal', useblit=True,
+        self.span2 = SpanSelector(self.ax2, self.onselectAdd, 'horizontal', useblit=False,
                         rectprops=dict(alpha=0.5, facecolor='green') )
-        self.span3 = SpanSelector(self.ax3, self.onselectAdd, 'horizontal', useblit=True,
+        self.span3 = SpanSelector(self.ax3, self.onselectAdd, 'horizontal', useblit=False,
                         rectprops=dict(alpha=0.5, facecolor='green') )
+        self.span4 = SpanSelector(self.ax4, self.onselectAdd, 'horizontal', useblit=False,
+                        rectprops=dict(alpha=0.5, facecolor='green') )
+        
+        self.mode_label['text'] = 'Mode: ADD'
+        self.mode_label['bg'] = 'green'
         self.fig.canvas.draw()
-    
+
+
     def _del(self):
         if self.show_debug_msg:
             print('_del()')
-        self.span1 = SpanSelector(self.ax1, self.onselectDel, 'horizontal', useblit=True,
+        self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='r', lw=1)
+        self.span1 = SpanSelector(self.ax1, self.onselectDel, 'horizontal', useblit=False,
                         rectprops=dict(alpha=0.5, facecolor='red') )
-        self.span2 = SpanSelector(self.ax2, self.onselectDel, 'horizontal', useblit=True,
+        self.span2 = SpanSelector(self.ax2, self.onselectDel, 'horizontal', useblit=False,
                         rectprops=dict(alpha=0.5, facecolor='red') )
-        self.span3 = SpanSelector(self.ax3, self.onselectDel, 'horizontal', useblit=True,
+        self.span3 = SpanSelector(self.ax3, self.onselectDel, 'horizontal', useblit=False,
                         rectprops=dict(alpha=0.5, facecolor='red') )
+        self.span4 = SpanSelector(self.ax4, self.onselectDel, 'horizontal', useblit=False,
+                        rectprops=dict(alpha=0.5, facecolor='red') )
+        
+        self.mode_label['text'] = 'Mode: DEL'
+        self.mode_label['bg'] = 'red'
         self.fig.canvas.draw()
-    
+
+  
+    def _zoom_in(self):
+        if self.show_debug_msg:
+            print('_zoom_in()')
+        self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='b', lw=1)
+        self.span1 = SpanSelector(self.ax1, self.onselectZoom, 'horizontal', useblit=False,
+                        rectprops=dict(alpha=0.5, facecolor='blue') )
+        self.span2 = SpanSelector(self.ax2, self.onselectZoom, 'horizontal', useblit=False,
+                        rectprops=dict(alpha=0.5, facecolor='blue') )
+        self.span3 = SpanSelector(self.ax3, self.onselectZoom, 'horizontal', useblit=False,
+                        rectprops=dict(alpha=0.5, facecolor='blue') )
+        self.span4 = SpanSelector(self.ax4, self.onselectZoom, 'horizontal', useblit=False,
+                        rectprops=dict(alpha=0.5, facecolor='blue') )
+        
+        self.mode_label['text'] = 'Mode: ZOOM'
+        self.mode_label['bg'] = 'blue'
+        self.fig.canvas.draw()
+
+
+    def _zoom_out(self):
+        if self.show_debug_msg:
+            print('_zoom_out()')
+
+        self.plotUsages()
+        self.fig.canvas.draw()
+
+
     def _save(self):
         if self.show_debug_msg:
             print('_save()')
@@ -389,7 +602,7 @@ class VisualizerWindow:
             if not askyesno('Overwrite File?', 'File "{}" already exists. Overwrite?'.format(self.csv_out_file)):
                 return
         print('save {}'.format(self.csv_out_file))
-        self.dataMgr.writeCSV(self.csv_out_file, self.manual_usage)
+        self.dataMgr.writeCSV(self.csv_out_file, self.usage_manual)
 
 
 
