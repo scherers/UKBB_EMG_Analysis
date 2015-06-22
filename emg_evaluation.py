@@ -176,12 +176,12 @@ def getTimeString(t):
 	return str(hours) + ":" + str(minutes) + ":" + str(seconds)
 
 
-def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_beat, lp_all, lp_filtered, ibint_peak, ibint_qrs, ibint_tacho=None):
+def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_beat, lp_all, lp_filtered, ibint_peak, ibint_qrs, usage_bib, usage_total, ibint_tacho=None):
 	outfile = open(filename, 'w')
 
 	print "writing output"
 	
-	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","qrs_beat","lp_all","lp_filtered","ibint_peak","ibint_qrs"'
+	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","qrs_beat","lp_all","lp_filtered","ibint_peak","ibint_qrs","usage_rmsd","usage_total"'
 
 	if ibint_tacho != None:
 		header += ',"ibint_tacho"'
@@ -203,7 +203,9 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_
 		result += str(lp_all[i]) + ","
 		result += str(lp_filtered[i]) + ","
 		result += str(ibint_peak[i]) + ","
-		result += str(ibint_qrs[i])
+		result += str(ibint_qrs[i]) + ","
+		result += str(int(usage_bib[i])) + ","
+		result += str(int(usage_total[i]))
 		
 		if ibint_tacho != None:
 			result += "," + str(ibint_tacho[i])
@@ -265,6 +267,15 @@ def getUsageVec(vec_in, th, delta):
 		if vec_in[i] > th:
 			for j in range(max(0,i-delta),min(i+delta,len(vec_in))):
 				result[j] = 0
+	return result
+
+def generateDefensiveUsageVector(movie_vec, rmsd_vec, bib_vec):
+	result = []
+	for i in range(0,len(movie_vec)):
+		if movie_vec[i] == 1 and rmsd_vec[i] == 1 and bib_vec[i] == 1:
+			result.append(1)
+		else:
+			result.append(0)
 	return result
 
 
@@ -430,6 +441,8 @@ if __name__ == "__main__":
 	v6 = getUsageVec(v5, 0.25, 2000)
 	print "vecs ready"
 
+	usage_final = generateDefensiveUsageVector(usage_vec, index, v6)
+
 	if writePDF:
 		print "writing plots"
 		pdf_pages = PdfPages(pdf_file)	
@@ -482,11 +495,12 @@ if __name__ == "__main__":
         		plt.title("Beats and low-passed signal")
         	
         		ax = plt.subplot(7, 1, 6, sharex=ax1)
-        		ax.set_ylim([-3, 6])
+        		ax.set_ylim([-4, 8])
+			plt.plot(x[index_low:index_high], np.array(usage_final[index_low:index_high]) + 6*np.ones(dx), linewidth=2, label='Final Usage')
 			plt.plot(x[index_low:index_high], np.array(v6[index_low:index_high]) + 4*np.ones(dx), label='IBI Usage Vec')
         		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
         		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
-        		plt.legend(loc=4, fontsize=5, ncol=3)
+        		plt.legend(loc=4, fontsize=5, ncol=4)
         		plt.grid()
         		plt.title("Data quality indicator")
         
@@ -528,8 +542,8 @@ if __name__ == "__main__":
         	print "\r\ndone"
 
 	if args.extra_file != '':
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), f_hf(x))
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, f_hf(x))
 	else:
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x))
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final)
 
 	
