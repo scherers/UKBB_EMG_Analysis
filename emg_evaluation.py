@@ -357,6 +357,7 @@ if __name__ == "__main__":
 		n_peaks_vec = []
 		th_vec = []
 		count = 0
+		peak_old = -10
 		while peak_value < 4:
 			peaks = findPeaks(np.array(y)**2, np.ones(len(y)), th, 10000)
 			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
@@ -365,6 +366,11 @@ if __name__ == "__main__":
 			print "\tpeak value", peak_value, th
 			n_peaks_vec.append(peak_value)
 			th_vec.append(th)
+			
+			if peak_value > 1 and abs(peak_value-peak_old) == 0:
+				break
+
+			peak_old = peak_value
 			count += 1
 			th *= 0.9
 
