@@ -7,6 +7,7 @@ import numpy as np
 from numpy.fft import fft, ifft, fftshift
 import copy
 from scipy.interpolate import interp1d
+from scipy import signal
 
 import argparse
 
@@ -175,12 +176,12 @@ def getTimeString(t):
 	return str(hours) + ":" + str(minutes) + ":" + str(seconds)
 
 
-def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_beat, lp_all, lp_filtered, ibint_peak, ibint_qrs, ibint_tacho=None):
+def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_beat, lp_all, lp_filtered, ibint_peak, ibint_qrs, usage_bib, usage_total, ibint_tacho=None):
 	outfile = open(filename, 'w')
 
 	print "writing output"
 	
-	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","qrs_beat","lp_all","lp_filtered","ibint_peak","ibint_qrs"'
+	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","qrs_beat","lp_all","lp_filtered","ibint_peak","ibint_qrs","usage_rmsd","usage_total"'
 
 	if ibint_tacho != None:
 		header += ',"ibint_tacho"'
@@ -202,7 +203,9 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_
 		result += str(lp_all[i]) + ","
 		result += str(lp_filtered[i]) + ","
 		result += str(ibint_peak[i]) + ","
-		result += str(ibint_qrs[i])
+		result += str(ibint_qrs[i]) + ","
+		result += str(int(usage_bib[i])) + ","
+		result += str(int(usage_total[i]))
 		
 		if ibint_tacho != None:
 			result += "," + str(ibint_tacho[i])
@@ -246,6 +249,34 @@ def extractHFFromFile(filename):
 		count += 1
 	infile.close()
 	return [x,y]
+
+def getDiffVec(v1, v2, v3):
+	result = []
+	for i in range(0,len(v1)):
+		tmp = []
+		tmp.append(abs(v1[i]-v2[i]))
+		#tmp.append(abs(v2[i]-v3[i]))
+		tmp.append(abs(v1[i]-v3[i]))
+		tmp = sorted(tmp)
+		result.append(tmp[0])
+	return result
+
+def getUsageVec(vec_in, th, delta):
+	result = list(np.ones(len(vec_in)))
+	for i in range(0,len(vec_in)):
+		if vec_in[i] > th:
+			for j in range(max(0,i-delta),min(i+delta,len(vec_in))):
+				result[j] = 0
+	return result
+
+def generateDefensiveUsageVector(movie_vec, rmsd_vec, bib_vec):
+	result = []
+	for i in range(0,len(movie_vec)):
+		if movie_vec[i] == 1 and rmsd_vec[i] == 1 and bib_vec[i] == 1:
+			result.append(1)
+		else:
+			result.append(0)
+	return result
 
 
 if __name__ == "__main__":
@@ -315,7 +346,7 @@ if __name__ == "__main__":
 	usage_vec = usage_vec[:limit]
 	t_string = t_string[:limit]
 
-	delta = 2500	
+	delta = 4000	
 	index = thresholdRMSD(rmsd, rmsd_cutoff, delta)
 
 	peak_clean_range = int(500 / 5)
@@ -326,6 +357,7 @@ if __name__ == "__main__":
 		n_peaks_vec = []
 		th_vec = []
 		count = 0
+		peak_old = -10
 		while peak_value < 4:
 			peaks = findPeaks(np.array(y)**2, np.ones(len(y)), th, 10000)
 			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
@@ -334,6 +366,11 @@ if __name__ == "__main__":
 			print "\tpeak value", peak_value, th
 			n_peaks_vec.append(peak_value)
 			th_vec.append(th)
+			
+			if peak_value > 1 and abs(peak_value-peak_old) == 0:
+				break
+
+			peak_old = peak_value
 			count += 1
 			th *= 0.9
 
@@ -401,6 +438,17 @@ if __name__ == "__main__":
 
 	qrs_peaks_indexed = np.array(index) * np.array(qrs_peaks)
 
+	print "preparing vecs"
+	v1 = f_peak(x)
+	v2 = f_qrs(x)
+	v3 = f_hf(x)
+	v4 = getDiffVec(v1, v2, v3)
+	v5 = signal.medfilt(v4,201)
+	v6 = getUsageVec(v5, 0.25, 2000)
+	print "vecs ready"
+
+	usage_final = generateDefensiveUsageVector(usage_vec, index, v6)
+
 	if writePDF:
 		print "writing plots"
 		pdf_pages = PdfPages(pdf_file)	
@@ -438,8 +486,12 @@ if __name__ == "__main__":
         		plt.title("Beats")
         
         		ax = plt.subplot(7, 1, 4, sharex=ax1)
-        		plt.plot(x[index_low:index_high], passed[index_low:index_high])
-        		plt.title("Low-pass @1.5Hz")
+			ax.set_ylim([-1, 3])
+        		#plt.plot(x[index_low:index_high], passed[index_low:index_high])
+			plt.plot(x[index_low:index_high], v5[index_low:index_high])
+			plt.grid()
+        		#plt.title("Low-pass @1.5Hz")
+			plt.title("IBI Similarity Measurement")
         
         		ax = plt.subplot(7, 1, 5, sharex=ax1)
         		ax.set_ylim([-3, 3])
@@ -449,10 +501,12 @@ if __name__ == "__main__":
         		plt.title("Beats and low-passed signal")
         	
         		ax = plt.subplot(7, 1, 6, sharex=ax1)
-        		ax.set_ylim([-3, 4])
+        		ax.set_ylim([-4, 8])
+			plt.plot(x[index_low:index_high], np.array(usage_final[index_low:index_high]) + 6*np.ones(dx), linewidth=2, label='Final Usage')
+			plt.plot(x[index_low:index_high], np.array(v6[index_low:index_high]) + 4*np.ones(dx), label='IBI Usage Vec')
         		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
         		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
-        		plt.legend(loc=4, fontsize=5, ncol=2)
+        		plt.legend(loc=4, fontsize=5, ncol=4)
         		plt.grid()
         		plt.title("Data quality indicator")
         
@@ -476,12 +530,13 @@ if __name__ == "__main__":
 
 			ax = plt.subplot(7, 1, 7, sharex=ax1)
 			ax.set_ylim([-1, 5])
-			plt.plot(x[index_low:index_high], f_peak(x[index_low:index_high]), alpha=0.4, label='IBInt-Peak')
-			plt.plot(x[index_low:index_high], f_qrs(x[index_low:index_high]), 'g', alpha=0.4, label='IBInt-QRS')
+			#ax.set_ylim([2.2, 2.6])
+			plt.plot(x[index_low:index_high], v1[index_low:index_high], alpha=0.4, label='IBInt-Peak')
+			plt.plot(x[index_low:index_high], v2[index_low:index_high], 'g', alpha=0.4, label='IBInt-QRS')
 			
 			if args.extra_file != '':
-				plt.plot(x[index_low:index_high], f_hf(x[index_low:index_high]), 'r', alpha=0.4, label='IBInt-CardioTach')
-			
+				plt.plot(x[index_low:index_high], v3[index_low:index_high], 'r', alpha=0.4, label='IBInt-CardioTach')
+
 			plt.grid()
         		plt.legend(loc=4, fontsize=5, ncol=3)
 
@@ -493,8 +548,8 @@ if __name__ == "__main__":
         	print "\r\ndone"
 
 	if args.extra_file != '':
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), f_hf(x))
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, f_hf(x))
 	else:
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x))
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final)
 
 	
