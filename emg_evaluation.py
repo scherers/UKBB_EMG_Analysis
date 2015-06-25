@@ -601,10 +601,10 @@ if __name__ == "__main__":
         	print "\r\ndone"
 
 	if args.extra_file != '':
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec, f_hf(x))
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec, f_hf(x))
 		#pass
 	else:
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec)
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec)
 
 	tmp = []
 	for i in range(0,len(peaks_indexed)):
