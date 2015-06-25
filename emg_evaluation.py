@@ -176,18 +176,20 @@ def getTimeString(t):
 	return str(hours) + ":" + str(minutes) + ":" + str(seconds)
 
 
-def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_beat, lp_all, lp_filtered, ibint_peak, ibint_qrs, usage_bib, usage_total, ibint_tacho=None):
-	outfile = open(filename, 'w')
-
+def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, beat_raw, qrs_beat, lp_all, lp_filtered, ibint_peak, ibint_qrs, usage_bib, usage_total, jump_vec, ibint_tacho=None):
 	print "writing output"
 	
-	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","qrs_beat","lp_all","lp_filtered","ibint_peak","ibint_qrs","usage_rmsd","usage_total"'
+	content = []
+
+	header = '"time","usage_md","usage_rmsd","f","rmsd","beat","peaks_raw","qrs_beat","lp_all","lp_filtered","ibint_peak","ibint_qrs","usage_rmsd","usage_total","jump_ibi"'
 
 	if ibint_tacho != None:
 		header += ',"ibint_tacho"'
 
 	header += '\r\n'
-	outfile.write(header)
+	#outfile.write(header)
+
+	content.append(header)
 
 	for i in range(0,len(time_as_string)):
 		if (i>0) and (np.fmod(i,1000) < 0.001):
@@ -199,19 +201,25 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, qrs_
 		result += str(f[i]) + ","
 		result += str(rmsd[i]) + ","
 		result += str(beat[i]) + ","
+		result += str(beat_raw[i]) + ","
 		result += str(qrs_beat[i]) + ","
 		result += str(lp_all[i]) + ","
 		result += str(lp_filtered[i]) + ","
 		result += str(ibint_peak[i]) + ","
 		result += str(ibint_qrs[i]) + ","
 		result += str(int(usage_bib[i])) + ","
-		result += str(int(usage_total[i]))
+		result += str(int(usage_total[i])) + ","
+		result += str(int(jump_vec[i]))
 		
 		if ibint_tacho != None:
 			result += "," + str(ibint_tacho[i])
 		
 		result += "\r\n"
-		outfile.write(result)
+		#outfile.write(result)
+		content.append(result)
+
+	outfile = open(filename, 'w')
+	outfile.writelines(content)
 	outfile.close()
 	print "\r\ndone"
 
@@ -265,7 +273,7 @@ def getUsageVec(vec_in, th, delta):
 	result = list(np.ones(len(vec_in)))
 	for i in range(0,len(vec_in)):
 		if vec_in[i] > th:
-			for j in range(max(0,i-delta),min(i+delta,len(vec_in))):
+			for j in range(max(0,i-int(1.2*delta)),min(i+int(1.2*delta),len(vec_in))):
 				result[j] = 0
 	return result
 
@@ -277,6 +285,34 @@ def generateDefensiveUsageVector(movie_vec, rmsd_vec, bib_vec):
 		else:
 			result.append(0)
 	return result
+
+def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
+	result = []
+	for i in range(0,len(movie_vec)):
+		if movie_vec[i] == 1 and rmsd_vec[i] == 1 and bib_vec[i] == 0:
+			result.append(1)
+		else:
+			result.append(0)
+
+	i = 10 * 500
+	ind = []
+	while i < len(result):
+		if result[i] == 1:
+			ind.append(i + delta/2)
+			while result[i] == 1:
+				result[i] = 0
+				i += 1
+		i += 1
+
+	result2 = list(np.zeros(len(result)))
+
+	d = 2000
+	for i in ind:
+		if np.max(diff_vec[i-d:i+d]) > 0.2:
+			result2[i] = 1
+			print "jump", (i/500)/60.0, np.max(diff_vec[i-d:i+d])
+	return result2
+
 
 
 if __name__ == "__main__":
@@ -354,6 +390,7 @@ if __name__ == "__main__":
 	if abs(np.mean(y)) > 0:
 		peak_value = 0
 		th = 10.0*np.std(np.array(y)**2)
+		#th = 5000
 		n_peaks_vec = []
 		th_vec = []
 		count = 0
@@ -367,7 +404,7 @@ if __name__ == "__main__":
 			n_peaks_vec.append(peak_value)
 			th_vec.append(th)
 			
-			if peak_value > 1 and abs(peak_value-peak_old) == 0:
+			if peak_value > 1 and abs(peak_value-peak_old) < 0.001:
 				break
 
 			peak_old = peak_value
@@ -436,18 +473,33 @@ if __name__ == "__main__":
 	int_x_qrs, int_y_qrs = getBeatVectorsForInt(x, qrs_peaks)
 	f_qrs = interp1d(int_x_qrs, int_y_qrs)
 
-	qrs_peaks_indexed = np.array(index) * np.array(qrs_peaks)
-
 	print "preparing vecs"
+	
 	v1 = f_peak(x)
+	print "\t1/6 done"
+
 	v2 = f_qrs(x)
+	print "\t2/6 done"
+
 	v3 = f_hf(x)
+	print "\t3/6 done"
+
 	v4 = getDiffVec(v1, v2, v3)
+	print "\t4/6 done"
+
 	v5 = signal.medfilt(v4,201)
-	v6 = getUsageVec(v5, 0.25, 2000)
+	print "\t5/6 done"
+
+	v6 = getUsageVec(v5, 0.2, 2000)
+	print "\t6/6 done"
+
 	print "vecs ready"
 
 	usage_final = generateDefensiveUsageVector(usage_vec, index, v6)
+	jump_vec = generateIBIJumpVector(usage_vec, index, v6, delta, v5)
+
+	qrs_peaks_indexed = np.array(usage_final) * np.array(qrs_peaks)
+	peaks_indexed = np.array(usage_final) * np.array(peaks_indexed)
 
 	if writePDF:
 		print "writing plots"
@@ -506,6 +558,7 @@ if __name__ == "__main__":
 			plt.plot(x[index_low:index_high], np.array(v6[index_low:index_high]) + 4*np.ones(dx), label='IBI Usage Vec')
         		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
         		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
+			plt.plot(x[index_low:index_high], jump_vec[index_low:index_high])
         		plt.legend(loc=4, fontsize=5, ncol=4)
         		plt.grid()
         		plt.title("Data quality indicator")
@@ -548,8 +601,48 @@ if __name__ == "__main__":
         	print "\r\ndone"
 
 	if args.extra_file != '':
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, f_hf(x))
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec, f_hf(x))
+		#pass
 	else:
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final)
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec)
+
+	tmp = []
+	for i in range(0,len(peaks_indexed)):
+		if peaks_indexed[i] == 1:
+			tmp.append(i)
+
+	tmp2 = []
+	for i in range(0,len(tmp)-1):
+		if usage_final[tmp[i]] == 1 and usage_final[tmp[i+1]] == 1:
+			diff = (tmp[i+1]-tmp[i])/500.0
+			if diff < 5:
+				tmp2.append(diff)
+	
+	tmp4 = []
+	tmp5 = []
+	tmp6 = []
+	w = 5
+	t = 0.05
+	for i in range(w,len(tmp2)-w):
+		mean = np.mean(tmp2[i-w:i+w+1])
+		q = abs(tmp2[i]-mean)
+		if q > t:
+			tmp4.append(i)
+			tmp5.append(tmp2[i])
+		else:
+			tmp6.append(tmp2[i])
+
+	plt.figure()
+	plt.plot(tmp2)
+
+	print len(tmp4), "outlayers found"
+	plt.plot(tmp4, tmp5, 'or', alpha=0.6)
+	pdf_file3 = ''.join(filename.split(".")[:-1]) + "_ibi.pdf"
+	plt.savefig(pdf_file3)
+
+	plt.figure()
+	plt.plot(tmp6)
+	pdf_file4 = ''.join(filename.split(".")[:-1]) + "_ibi_clean.pdf"
+	plt.savefig(pdf_file4)
 
 	
