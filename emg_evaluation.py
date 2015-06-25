@@ -60,6 +60,8 @@ def readData(filename):
 	count = 0
 	for l in infile:
 		tmp = l.split(",")
+		if len(tmp) < 4:
+			continue
 		f_dia.append(float(tmp[2]))
 		rms_dia.append(float(tmp[3]))
 		time_axis.append(count/500.0)
@@ -70,12 +72,12 @@ def readData(filename):
 			motiondetection_usage.append(1)
 		count += 1
 
-	print "reading done"
+	print ("reading done")
 	return [f_dia, rms_dia, time_axis, motiondetection_usage, time_as_string]
 
 
 def thresholdRMSD(rmsd_data, cutoff, delta):
-	print "RMSD Filter"
+	print ("RMSD Filter")
 	i = 0
 	index = np.zeros((1,len(rmsd_data)), dtype=int)[0]
 	while i < (len(rmsd_data)):
@@ -88,7 +90,7 @@ def thresholdRMSD(rmsd_data, cutoff, delta):
 		else:
 			index[max(i-delta, 0):i] = 0
 			i += delta
-	print '\ndone'
+	print ('\ndone')
 	return index
 
 
@@ -177,7 +179,7 @@ def getTimeString(t):
 
 
 def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, beat_raw, qrs_beat, lp_all, lp_filtered, ibint_peak, ibint_qrs, usage_bib, usage_total, jump_vec, ibint_tacho=None):
-	print "writing output"
+	print ("writing output")
 	
 	content = []
 
@@ -221,7 +223,7 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, beat
 	outfile = open(filename, 'w')
 	outfile.writelines(content)
 	outfile.close()
-	print "\r\ndone"
+	print ("\r\ndone")
 
 
 def getBeatVectorsForInt(data_x, data_y):
@@ -287,7 +289,7 @@ def generateDefensiveUsageVector(movie_vec, rmsd_vec, bib_vec):
 	return result
 
 def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
-	print "jump vector creation"
+	print ("jump vector creation")
 	result = []
 	for i in range(0,len(movie_vec)):
 		if movie_vec[i] == 1 and rmsd_vec[i] == 1 and bib_vec[i] == 0:
@@ -310,11 +312,11 @@ def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
 	d = 2000
 	for i in ind:
 		if np.max(diff_vec[i-d:i+d]) > 0.2:
-			result2[i] = 1
+			result2[int(i)] = 1
 			minutes = (i/500)/60
 			sec = int(60*((i/500)/60.0 - minutes))
-			print "\tjump-position found:", minutes, "mins", sec, "secs"
-	print "done"
+			print ("\tjump-position found:", minutes, "mins", sec, "secs")
+	print ("done")
 	return result2
 
 
@@ -331,7 +333,7 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 
 	if args.extra_file != '':
-		print "extra input file given:", args.extra_file
+		print ("extra input file given:", args.extra_file)
 
 	filename = args.filename[0]
 
@@ -340,13 +342,13 @@ if __name__ == "__main__":
 
 	if writePDF:
 		pdf_file = ''.join(filename.split(".")[:-1]) + ".pdf"
-		print "pdf-file:", pdf_file
+		print ("pdf-file:", pdf_file)
 
 	pdf_file_peakfitting = ''.join(filename.split(".")[:-1]) + "_peak_fitting.pdf"
-	print "pdf-file2:", pdf_file_peakfitting
+	print ("pdf-file2:", pdf_file_peakfitting)
 
 	csv_out_file = ''.join(filename.split(".")[:-1]) + "_eval.csv"
-	print "csv-out-file:", csv_out_file
+	print ("csv-out-file:", csv_out_file)
 	
 	[y_raw, rmsd, x, usage_vec, t_string] = readData(filename)
 
@@ -359,7 +361,7 @@ if __name__ == "__main__":
 	if limit_manual == 0:
 		limit_manual = len(y_raw)
 
-	limit = 60 * 500 * (limit_manual / (60*500) )
+	limit = int(60 * 500 * (limit_manual / (60*500) ))
 
 	y_raw = y_raw[:limit]
 	lowpass_y = lowpass(y_raw,0.6)
@@ -368,17 +370,17 @@ if __name__ == "__main__":
 	for i in range(0,len(y_raw)):
 		y.append((y_raw[i]-lowpass_y[i]))
 
-	print 'RMSD Stat (mean,std)', np.mean(rmsd), np.std(rmsd)
-	print 'F Stat (mean,std)', np.mean(y), np.std(y)
+	print ('RMSD Stat (mean,std)', np.mean(rmsd), np.std(rmsd))
+	print ('F Stat (mean,std)', np.mean(y), np.std(y))
 	
-	rmsd_cutoff = min([np.mean(rmsd)+np.std(rmsd), 2*np.mean(rmsd)])
-	print "rmsd-cutoff", rmsd_cutoff
+	rmsd_cutoff = min(np.mean(rmsd)+np.std(rmsd), 2*np.mean(rmsd))
+	print ("rmsd-cutoff", rmsd_cutoff)
 
 	peak_cutoff =  2*np.std(y)
-	print "peak-cutoff", peak_cutoff
+	print ("peak-cutoff", peak_cutoff)
 
 	lp = 1.8
-	print "low-pass freq", lp
+	print ("low-pass freq", lp)
 
 	y = y[:limit]
 	rmsd = rmsd[:limit]
@@ -404,7 +406,7 @@ if __name__ == "__main__":
 			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
 			peaks_indexed = np.array(index) * np.array(peaks_cleaned)
 			peak_value = 500 * np.mean(np.array(peaks_indexed)) / np.mean(np.array(index))
-			print "\tpeak value", peak_value, th
+			print ("\tpeak value", peak_value, th)
 			n_peaks_vec.append(peak_value)
 			th_vec.append(th)
 			
@@ -430,7 +432,7 @@ if __name__ == "__main__":
 		plt.savefig(pdf_file_peakfitting)
 
 	else:
-		print 'no values'
+		print ('no values')
 		th = 1
 
 	peaks = findPeaks(np.array(y)**2, np.ones(len(y)), th, 10000)
@@ -477,27 +479,27 @@ if __name__ == "__main__":
 	int_x_qrs, int_y_qrs = getBeatVectorsForInt(x, qrs_peaks)
 	f_qrs = interp1d(int_x_qrs, int_y_qrs)
 
-	print "preparing vecs"
+	print ("preparing vecs")
 	
 	v1 = f_peak(x)
-	print "\t1/6 done"
+	print ("\t1/6 done")
 
 	v2 = f_qrs(x)
-	print "\t2/6 done"
+	print ("\t2/6 done")
 
 	v3 = f_hf(x)
-	print "\t3/6 done"
+	print ("\t3/6 done")
 
 	v4 = getDiffVec(v1, v2, v3)
-	print "\t4/6 done"
+	print ("\t4/6 done")
 
 	v5 = signal.medfilt(v4,201)
-	print "\t5/6 done"
+	print ("\t5/6 done")
 
 	v6 = getUsageVec(v5, 0.2, 2000)
-	print "\t6/6 done"
+	print ("\t6/6 done")
 
-	print "vecs ready"
+	print ("vecs ready")
 
 	usage_final = generateDefensiveUsageVector(usage_vec, index, v6)
 	jump_vec = generateIBIJumpVector(usage_vec, index, v6, delta, v5)
@@ -506,83 +508,82 @@ if __name__ == "__main__":
 	peaks_indexed = np.array(usage_final) * np.array(peaks_indexed)
 
 	if writePDF:
-		print "writing plots"
+		print ("writing plots")
 		pdf_pages = PdfPages(pdf_file)	
 
 		dx = 60 * 500
-        	for i in range(0, limit, dx):
+		for i in range(0, limit, dx):
+			sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/limit) )
+			sys.stdout.flush()
         
-        		sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/limit) )
-        		sys.stdout.flush()
+			index_low = i
+			index_high = min(i+dx, limit)
         
-        		index_low = i
-        		index_high = min(i+dx, limit)
+			plt.rc('font', **{'size':'5'})
         
-        		plt.rc('font', **{'size':'5'})
+			fig, axes = plt.subplots(nrows=6, ncols=1)
+			fig.tight_layout(pad=3.0, w_pad=4.0, h_pad=3.0)
         
-        		fig, axes = plt.subplots(nrows=6, ncols=1)
-        		fig.tight_layout(pad=3.0, w_pad=4.0, h_pad=3.0)
+			ax1 = plt.subplot(7, 1, 1)
+			ax1.xaxis.set_major_formatter(plt.FuncFormatter(HMS))
+			ax1.set_ylim([-2*np.std(np.array(y)), 2*np.std(np.array(y))])
+			plt.plot(x[index_low:index_high], np.array(y[index_low:index_high]))
         
-        		ax1 = plt.subplot(7, 1, 1)
-        		ax1.xaxis.set_major_formatter(plt.FuncFormatter(HMS))
-        		ax1.set_ylim([-2*np.std(np.array(y)), 2*np.std(np.array(y))])
-        		plt.plot(x[index_low:index_high], np.array(y[index_low:index_high]))
-        
-        		plt.title("Raw signal")
+			plt.title("Raw signal")
         	
-        		ax = plt.subplot(7, 1, 2, sharex=ax1)
-        		ax.set_ylim([-0.1, 5])
-        		plt.plot(x[index_low:index_high], rmsd[index_low:index_high])
-        		plt.title("RMSD")
+			ax = plt.subplot(7, 1, 2, sharex=ax1)
+			ax.set_ylim([-0.1, 5])
+			plt.plot(x[index_low:index_high], rmsd[index_low:index_high])
+			plt.title("RMSD")
         
-        		ax = plt.subplot(7, 1, 3, sharex=ax1)
-        		ax.set_ylim([-1.5, 1.5])
-        		plt.plot(x[index_low:index_high], peaks_cleaned[index_low:index_high])
-        		plt.plot(x[index_low:index_high], -qrs_peaks[index_low:index_high], 'r')
-        		plt.title("Beats")
+			ax = plt.subplot(7, 1, 3, sharex=ax1)
+			ax.set_ylim([-1.5, 1.5])
+			plt.plot(x[index_low:index_high], peaks_cleaned[index_low:index_high])
+			plt.plot(x[index_low:index_high], -qrs_peaks[index_low:index_high], 'r')
+			plt.title("Beats")
         
-        		ax = plt.subplot(7, 1, 4, sharex=ax1)
+			ax = plt.subplot(7, 1, 4, sharex=ax1)
 			ax.set_ylim([-1, 3])
-        		#plt.plot(x[index_low:index_high], passed[index_low:index_high])
+			#plt.plot(x[index_low:index_high], passed[index_low:index_high])
 			plt.plot(x[index_low:index_high], v5[index_low:index_high])
 			plt.grid()
         		#plt.title("Low-pass @1.5Hz")
 			plt.title("IBI Similarity Measurement")
         
-        		ax = plt.subplot(7, 1, 5, sharex=ax1)
-        		ax.set_ylim([-3, 3])
-        		plt.plot(x[index_low:index_high], peaks_indexed[index_low:index_high], alpha=0.4)
-        		plt.plot(x[index_low:index_high], -qrs_peaks_indexed[index_low:index_high], 'r', alpha=0.4)
-        		plt.plot(x[index_low:index_high], passed_filtered[index_low:index_high], 'g')
-        		plt.title("Beats and low-passed signal")
+			ax = plt.subplot(7, 1, 5, sharex=ax1)
+			ax.set_ylim([-3, 3])
+			plt.plot(x[index_low:index_high], peaks_indexed[index_low:index_high], alpha=0.4)
+			plt.plot(x[index_low:index_high], -qrs_peaks_indexed[index_low:index_high], 'r', alpha=0.4)
+			plt.plot(x[index_low:index_high], passed_filtered[index_low:index_high], 'g')
+			plt.title("Beats and low-passed signal")
         	
-        		ax = plt.subplot(7, 1, 6, sharex=ax1)
-        		ax.set_ylim([-4, 8])
+			ax = plt.subplot(7, 1, 6, sharex=ax1)
+			ax.set_ylim([-4, 8])
 			plt.plot(x[index_low:index_high], np.array(usage_final[index_low:index_high]) + 6*np.ones(dx), linewidth=2, label='Final Usage')
 			plt.plot(x[index_low:index_high], np.array(v6[index_low:index_high]) + 4*np.ones(dx), label='IBI Usage Vec')
-        		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
-        		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
+			plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
+			plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
 			#plt.plot(x[index_low:index_high], jump_vec[index_low:index_high])
-        		plt.legend(loc=4, fontsize=5, ncol=4)
-        		plt.grid()
-        		plt.title("Data quality indicator")
+			plt.legend(loc=4, fontsize=5, ncol=4)
+			plt.grid()
+			plt.title("Data quality indicator")
         
-        		#beat_int_filt_low = [n for n, j in enumerate(beat_int_x_filt) if j>(i/500)]
-        		#beat_int_filt_high = [n for n, j in enumerate(beat_int_x_filt) if j<(i/500) + dx/500]
+			#beat_int_filt_low = [n for n, j in enumerate(beat_int_x_filt) if j>(i/500)]
+			#beat_int_filt_high = [n for n, j in enumerate(beat_int_x_filt) if j<(i/500) + dx/500]
         
-        		#beat_int_low = [n for n, j in enumerate(beat_int_x) if j>(i/500)]
-        		#beat_int_high = [n for n, j in enumerate(beat_int_x) if j<(i/500) + dx/500]
-        
-        		#if len(beat_int_filt_low)>0 and len(beat_int_filt_high)>0:
-        		#	index_low_filt = beat_int_filt_low[0]
-        		#	index_high_filt = beat_int_filt_high[-1]
-        		#	index_low = beat_int_low[0]
-        		#	index_high = beat_int_high[-1]
-        		#	ax = plt.subplot(7, 1, 7, sharex=ax1)
-        		#	ax.set_ylim([0, 4])
-        		#	plt.plot(beat_int_x[index_low:index_high], beat_int_y[index_low:index_high], 'o', alpha=0.25)
-        		#	plt.plot(beat_int_x_filt[index_low_filt:index_high_filt], beat_int_y_filt[index_low_filt:index_high_filt], 'ob')
-        		#	plt.grid()
+			#beat_int_low = [n for n, j in enumerate(beat_int_x) if j>(i/500)]
+			#beat_int_high = [n for n, j in enumerate(beat_int_x) if j<(i/500) + dx/500]
+      
+			#if len(beat_int_filt_low)>0 and len(beat_int_filt_high)>0:
+			#	index_low_filt = beat_int_filt_low[0]
+			#	index_high_filt = beat_int_filt_high[-1]
+			#	index_low = beat_int_low[0]
+			#	index_high = beat_int_high[-1]
+			#	ax = plt.subplot(7, 1, 7, sharex=ax1)
+			#	ax.set_ylim([0, 4])
+			#	plt.plot(beat_int_x[index_low:index_high], beat_int_y[index_low:index_high], 'o', alpha=0.25)
+			#	plt.plot(beat_int_x_filt[index_low_filt:index_high_filt], beat_int_y_filt[index_low_filt:index_high_filt], 'ob')
+			#	plt.grid()
 			#	plt.title("Beat frequencies")
 
 			ax = plt.subplot(7, 1, 7, sharex=ax1)
@@ -595,18 +596,17 @@ if __name__ == "__main__":
 				plt.plot(x[index_low:index_high], v3[index_low:index_high], 'r', alpha=0.4, label='IBInt-CardioTach')
 
 			plt.grid()
-        		plt.legend(loc=4, fontsize=5, ncol=3)
+			plt.legend(loc=4, fontsize=5, ncol=3)
 
-        		pdf_pages.savefig(fig)
-        		fig.clf()
-        		plt.clf()
+			pdf_pages.savefig(fig)
+			fig.clf()
+			plt.clf()
         
-        	pdf_pages.close()
-        	print "\r\ndone"
+		pdf_pages.close()
+		print ("\r\ndone")
 
 	if args.extra_file != '':
 		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec, f_hf(x))
-		#pass
 	else:
 		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec)
 
@@ -639,7 +639,7 @@ if __name__ == "__main__":
 	plt.figure()
 	plt.plot(tmp2)
 
-	print len(tmp4), "outlayers found"
+	print (len(tmp4), "outlayers found")
 	plt.plot(tmp4, tmp5, 'or', alpha=0.6)
 	pdf_file3 = ''.join(filename.split(".")[:-1]) + "_ibi.pdf"
 	plt.savefig(pdf_file3)
