@@ -17,6 +17,7 @@ else:
     from tkinter.messagebox import showerror, askyesno
 
 import matplotlib
+import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.widgets import SpanSelector, MultiCursor
@@ -285,9 +286,12 @@ class VisualizerWindow:
         
         
         # Figure with Subplots
-        #self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True,figsize=(16,7.5), dpi=80, tight_layout=True, gridspec_kw = None)
-        #self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, gridspec_kw = dict(height_ratios=[3,2,2,1]),figsize=(16,7.5), dpi=80, tight_layout=True)
-        self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, figsize=(16,7.5), dpi=80, tight_layout=True)        
+        self.fig = plt.figure(figsize=(17,8), dpi=80, tight_layout=True)
+        gs = gridspec.GridSpec(4,1, height_ratios=[3,2,2,1])
+        self.ax1 = plt.subplot(gs[0])
+        self.ax2 = plt.subplot(gs[1], sharex=self.ax1)
+        self.ax3 = plt.subplot(gs[2], sharex=self.ax1)
+        self.ax4 = plt.subplot(gs[3], sharex=self.ax1)   
         
         canvas = FigureCanvasTkAgg(self.fig, master=self.visualizerFrame)
         canvas.show()
