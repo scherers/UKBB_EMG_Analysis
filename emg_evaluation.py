@@ -287,6 +287,7 @@ def generateDefensiveUsageVector(movie_vec, rmsd_vec, bib_vec):
 	return result
 
 def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
+	print "jump vector creation"
 	result = []
 	for i in range(0,len(movie_vec)):
 		if movie_vec[i] == 1 and rmsd_vec[i] == 1 and bib_vec[i] == 0:
@@ -310,7 +311,10 @@ def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
 	for i in ind:
 		if np.max(diff_vec[i-d:i+d]) > 0.2:
 			result2[i] = 1
-			print "jump", (i/500)/60.0, np.max(diff_vec[i-d:i+d])
+			minutes = (i/500)/60
+			sec = int(60*((i/500)/60.0 - minutes))
+			print "\tjump-position found:", minutes, "mins", sec, "secs"
+	print "done"
 	return result2
 
 
