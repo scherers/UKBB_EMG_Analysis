@@ -255,7 +255,7 @@ class VisualizerWindow:
         if '"usage_manual"' in self.dataMgr.usage_columns:
             self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_manual"'))
         elif '"usage_rmsd"' in self.dataMgr.usage_columns:
-            self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_rmsd"'))
+            self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_total"'))
         else:
             self.usg_man_select.current(0)
 
@@ -280,15 +280,14 @@ class VisualizerWindow:
         self.loading_label.pack()
         
         self.configFrame.pack()
-        
-
 
         self.visualizerFrame = Tk.Frame(self.root)
         
         
         # Figure with Subplots
-        self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, gridspec_kw = dict(height_ratios=[3,2,2,1]),figsize=(16,7.5), dpi=80, tight_layout=True)
-        #elf.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, figsize=(16,7.5), dpi=80, tight_layout=True)        
+        #self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True,figsize=(16,7.5), dpi=80, tight_layout=True, gridspec_kw = None)
+        #self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, gridspec_kw = dict(height_ratios=[3,2,2,1]),figsize=(16,7.5), dpi=80, tight_layout=True)
+        self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, figsize=(16,7.5), dpi=80, tight_layout=True)        
         
         canvas = FigureCanvasTkAgg(self.fig, master=self.visualizerFrame)
         canvas.show()
@@ -679,7 +678,6 @@ if __name__ == "__main__":
     print('Number of arguments: {} arguments.'.format(len(sys.argv)))
     print('Argument List: {}'.format(str(sys.argv)))
 
- 
     if (len(sys.argv)) > 1:
          gui = VisualizerWindow(sys.argv[1])
     else:
