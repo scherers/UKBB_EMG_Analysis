@@ -562,7 +562,7 @@ if __name__ == "__main__":
 			plt.plot(x[index_low:index_high], np.array(v6[index_low:index_high]) + 4*np.ones(dx), label='IBI Usage Vec')
         		plt.plot(x[index_low:index_high], np.array(index[index_low:index_high]) + 2*np.ones(dx), label='EMG Usage Vector')
         		plt.plot(x[index_low:index_high], usage_vec[index_low:index_high], label='Movie Usage Vector')
-			plt.plot(x[index_low:index_high], jump_vec[index_low:index_high])
+			#plt.plot(x[index_low:index_high], jump_vec[index_low:index_high])
         		plt.legend(loc=4, fontsize=5, ncol=4)
         		plt.grid()
         		plt.title("Data quality indicator")
