@@ -199,6 +199,8 @@ class VisualizerWindow:
                 new_out_file = asksaveasfilename(initialfile=self.csv_out_file)
                 if new_out_file:
                     self.csv_out_file = new_out_file
+                else:
+                    sys.exit(0)
                     
         print("csv-out-file: {}".format(self.csv_out_file))
         
@@ -285,9 +287,8 @@ class VisualizerWindow:
         
         
         # Figure with Subplots
-        self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, 
-            gridspec_kw = dict(height_ratios=[3,2,2,1]),
-            figsize=(16,7.5), dpi=80, tight_layout=True)        
+        self.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, gridspec_kw = dict(height_ratios=[3,2,2,1]),figsize=(16,7.5), dpi=80, tight_layout=True)
+        #elf.fig, (self.ax1, self.ax2, self.ax3, self.ax4) = plt.subplots(4,1, sharex=True, figsize=(16,7.5), dpi=80, tight_layout=True)        
         
         canvas = FigureCanvasTkAgg(self.fig, master=self.visualizerFrame)
         canvas.show()
