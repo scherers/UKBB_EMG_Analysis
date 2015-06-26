@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# TODO not python3 ready yet
-
 import sys
 import os.path
 
@@ -91,7 +89,6 @@ class DataManager:
         jmp_idxs = []
         count = 0
         self.data_lines = []
-        # TODO check data_lines saving (and usage_manual column removal)
         for l in self.infile:
             tmp = l.rstrip('\r\n').split(",")
             for p in range(0,len(plot_cols)):
@@ -255,7 +252,7 @@ class VisualizerWindow:
         
         if '"usage_manual"' in self.dataMgr.usage_columns:
             self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_manual"'))
-        elif '"usage_rmsd"' in self.dataMgr.usage_columns:
+        elif '"usage_total"' in self.dataMgr.usage_columns:
             self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_total"'))
         else:
             self.usg_man_select.current(0)
@@ -356,7 +353,7 @@ class VisualizerWindow:
 
         self.usage_names = []
         self.usage_cols = []
-        for k,v in self.usage_plots.iteritems():
+        for k,v in self.usage_plots.items():
             if v.get() == 1:
                 self.usage_names.append(k)
                 self.usage_cols.append(self.dataMgr.header_columns.index(k))
@@ -611,7 +608,12 @@ class VisualizerWindow:
     def _add(self):
         if self.show_debug_msg:
             print('_add()')
+        self.multi_cursor.disconnect()
         self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='g', lw=1)
+        self.span1.disconnect_events()
+        self.span2.disconnect_events()
+        self.span3.disconnect_events()
+        self.span4.disconnect_events()
         self.span1 = SpanSelector(self.ax1, self.onselectAdd, 'horizontal', useblit=True,
                         rectprops=dict(alpha=0.5, facecolor='green') )
         self.span2 = SpanSelector(self.ax2, self.onselectAdd, 'horizontal', useblit=True,
@@ -620,7 +622,7 @@ class VisualizerWindow:
                         rectprops=dict(alpha=0.5, facecolor='green') )
         self.span4 = SpanSelector(self.ax4, self.onselectAdd, 'horizontal', useblit=True,
                         rectprops=dict(alpha=0.5, facecolor='green') )
-        
+
         self.mode_label['text'] = 'Mode: ADD'
         self.mode_label['bg'] = 'green'
         self.fig.canvas.draw()
@@ -629,7 +631,13 @@ class VisualizerWindow:
     def _del(self):
         if self.show_debug_msg:
             print('_del()')
+        self.multi_cursor.disconnect()
         self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='r', lw=1)
+        self.span1.disconnect_events()
+        self.span1.disconnect_events()
+        self.span2.disconnect_events()
+        self.span3.disconnect_events()
+        self.span4.disconnect_events()
         self.span1 = SpanSelector(self.ax1, self.onselectDel, 'horizontal', useblit=True,
                         rectprops=dict(alpha=0.5, facecolor='red') )
         self.span2 = SpanSelector(self.ax2, self.onselectDel, 'horizontal', useblit=True,
@@ -638,7 +646,7 @@ class VisualizerWindow:
                         rectprops=dict(alpha=0.5, facecolor='red') )
         self.span4 = SpanSelector(self.ax4, self.onselectDel, 'horizontal', useblit=True,
                         rectprops=dict(alpha=0.5, facecolor='red') )
-        
+
         self.mode_label['text'] = 'Mode: DEL'
         self.mode_label['bg'] = 'red'
         self.fig.canvas.draw()
@@ -647,7 +655,13 @@ class VisualizerWindow:
     def _zoom_in(self):
         if self.show_debug_msg:
             print('_zoom_in()')
+        self.multi_cursor.disconnect()
         self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='b', lw=1)
+        self.span1.disconnect_events()
+        self.span1.disconnect_events()
+        self.span2.disconnect_events()
+        self.span3.disconnect_events()
+        self.span4.disconnect_events()
         self.span1 = SpanSelector(self.ax1, self.onselectZoom, 'horizontal', useblit=True,
                         rectprops=dict(alpha=0.5, facecolor='blue') )
         self.span2 = SpanSelector(self.ax2, self.onselectZoom, 'horizontal', useblit=True,
@@ -656,7 +670,7 @@ class VisualizerWindow:
                         rectprops=dict(alpha=0.5, facecolor='blue') )
         self.span4 = SpanSelector(self.ax4, self.onselectZoom, 'horizontal', useblit=True,
                         rectprops=dict(alpha=0.5, facecolor='blue') )
-        
+
         self.mode_label['text'] = 'Mode: ZOOM'
         self.mode_label['bg'] = 'blue'
         self.fig.canvas.draw()
