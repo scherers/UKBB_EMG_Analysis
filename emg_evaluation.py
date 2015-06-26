@@ -319,6 +319,25 @@ def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
 	print ("done")
 	return result2
 
+def peak_correction(peaks, f):
+	dx = 25	
+	ind = []
+	for i in range(dx,len(peaks)-dx-1):
+		if peaks[i] == 1:
+			ind.append(i)
+	
+	ind_corr = []
+	for i in ind:
+		tmp = f[i-dx:i+dx+1]
+		ind_corr.append(np.argmin(tmp)-25+i)
+
+	result = list(np.zeros(len(peaks)))
+	for i in ind_corr:
+		print i
+		result[i] = 1
+	
+	print len(f), len(result)
+	return result
 
 
 if __name__ == "__main__":
@@ -437,6 +456,9 @@ if __name__ == "__main__":
 
 	peaks = findPeaks(np.array(y)**2, np.ones(len(y)), th, 10000)
 	peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
+
+	peaks_cleaned = peak_correction(peaks_cleaned, y)
+
 	peaks_indexed = np.array(index) * np.array(peaks_cleaned)
 		
 	passed = lowpass(y, lp)
