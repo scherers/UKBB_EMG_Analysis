@@ -302,7 +302,7 @@ def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
 	while i < len(result):
 		if result[i] == 1:
 			ind.append(i + delta/2)
-			while result[i] == 1:
+			while (i<len(result)-1) and (result[i]==1):
 				result[i] = 0
 				i += 1
 		i += 1
@@ -322,18 +322,19 @@ def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
 def peak_correction(peaks, f):
 	dx = 25	
 	ind = []
-	for i in range(dx,len(peaks)-dx-1):
+	for i in range(dx,len(peaks)-3*dx-3):
 		if peaks[i] == 1:
 			ind.append(i)
 	
 	ind_corr = []
 	for i in ind:
 		tmp = f[i-dx:i+dx+1]
-		ind_corr.append(np.argmin(tmp)-25+i)
+		ind_temp = np.argmin(tmp)-dx+i
+		tmp2 = f[ind_temp:ind_temp+2*dx]
+		ind_corr.append(np.argmax(tmp2)+ind_temp)
 
 	result = list(np.zeros(len(peaks)))
 	for i in ind_corr:
-		print i
 		result[i] = 1
 	
 	print len(f), len(result)
