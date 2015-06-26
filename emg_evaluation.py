@@ -154,14 +154,14 @@ def detectQRS(emg):
          j = []
          k = []
          l = []
-         j = np.nonzero(y1[i+1:i+bound] < thresDOWN)[0][0]
-         if j:
+         j = np.nonzero(y1[i+1:i+bound] < thresDOWN)[0]
+         if len(j) > 0:
              qrsflag = 1
-             k = np.nonzero(y1[i+j:i+bound] > thresUP)[0][0]
-             if k:
-                 l = np.nonzero(y1[i+j+k:i+bound] < thresDOWN)[0][0]
-                 if l:
-                     if np.nonzero(y1[i+j+k+l:i+bound] > thresUP)[0]:
+             k = np.nonzero(y1[i+j[0]:i+bound] > thresUP)[0]
+             if len(k) > 0:
+                 l = np.nonzero(y1[i+j[0]+k[0]:i+bound] < thresDOWN)[0]
+                 if len(l) > 0:
+                     if len(np.nonzero(y1[i+j[0]+k[0]+l[0]:i+bound] > thresUP)[0]) > 0:
                          qrsflag = 0;
 
          if qrsflag > 0:
