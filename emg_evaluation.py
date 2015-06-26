@@ -101,16 +101,12 @@ def findPeaks(data, lower_bound):
 
 
 def cleanPeaks(peaks, window):
-	i = 0
 	result = copy.deepcopy(peaks)
-	while i < len(result):
-		if result[i] > 0:
-			for j in range(1,peak_clean_range):
-				if i+j < len(result):
-					result[i+j] = 0
-			i += peak_clean_range
-		else:
-			i += 1
+	j = 0
+	for i in np.nonzero(result>0)[0]:
+		if i >= j:
+			j = min(len(result), i+peak_clean_range)
+			result[i+1:j] = 0
 	return result
 
 
