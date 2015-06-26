@@ -94,14 +94,9 @@ def thresholdRMSD(rmsd_data, cutoff, delta):
 	return index
 
 
-def findPeaks(data, index, lower_bound, upper_bound):
-	cleaned_data = np.array(data) * np.array(index)
-	peaks = []
-	for i in range(0,len(cleaned_data)):
-		if cleaned_data[i] > lower_bound:
-			peaks.append(1)
-		else:
-			peaks.append(0)
+def findPeaks(data, lower_bound):
+	peaks = np.zeros(len(data))
+	peaks[data>lower_bound] = 1
 	return peaks
 
 
@@ -415,14 +410,14 @@ if __name__ == "__main__":
 
 	if abs(np.mean(y)) > 0:
 		peak_value = 0
+		y_squared = np.array(y)**2
 		th = 10.0*np.std(np.array(y)**2)
 		#th = 5000
 		n_peaks_vec = []
 		th_vec = []
-		count = 0
 		peak_old = -10
 		while peak_value < 4:
-			peaks = findPeaks(np.array(y)**2, np.ones(len(y)), th, 10000)
+			peaks = findPeaks(y_squared, th)
 			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
 			peaks_indexed = np.array(index) * np.array(peaks_cleaned)
 			peak_value = 500 * np.mean(np.array(peaks_indexed)) / np.mean(np.array(index))
@@ -434,7 +429,6 @@ if __name__ == "__main__":
 				break
 
 			peak_old = peak_value
-			count += 1
 			th *= 0.9
 
 		plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
@@ -455,7 +449,7 @@ if __name__ == "__main__":
 		print ('no values')
 		th = 1
 
-	peaks = findPeaks(np.array(y)**2, np.ones(len(y)), th, 10000)
+	peaks = findPeaks(np.array(y)**2, th)
 	peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
 
 	peaks_cleaned = peak_correction(peaks_cleaned, y)
