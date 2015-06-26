@@ -256,7 +256,7 @@ def getDiffVec(v1, v2, v3):
 	for i in range(0,len(v1)):
 		tmp = []
 		tmp.append(abs(v1[i]-v2[i]))
-		#tmp.append(abs(v2[i]-v3[i]))
+		tmp.append(abs(v2[i]-v3[i]))
 		tmp.append(abs(v1[i]-v3[i]))
 		tmp = sorted(tmp)
 		result.append(tmp[0])
@@ -489,6 +489,8 @@ if __name__ == "__main__":
 	for q in qrs_beats:
          qrs_peaks[q] = 1
 
+	qrs_peaks = peak_correction(list(qrs_peaks), y)
+
 	int_x_qrs, int_y_qrs = getBeatVectorsForInt(x, qrs_peaks)
 	f_qrs = interp1d(int_x_qrs, int_y_qrs)
 
@@ -552,7 +554,7 @@ if __name__ == "__main__":
 			ax = plt.subplot(7, 1, 3, sharex=ax1)
 			ax.set_ylim([-1.5, 1.5])
 			plt.plot(x[index_low:index_high], peaks_cleaned[index_low:index_high])
-			plt.plot(x[index_low:index_high], -qrs_peaks[index_low:index_high], 'r')
+			plt.plot(x[index_low:index_high], -np.array(qrs_peaks[index_low:index_high]), 'r')
 			plt.title("Beats")
         
 			ax = plt.subplot(7, 1, 4, sharex=ax1)
@@ -566,7 +568,7 @@ if __name__ == "__main__":
 			ax = plt.subplot(7, 1, 5, sharex=ax1)
 			ax.set_ylim([-3, 3])
 			plt.plot(x[index_low:index_high], peaks_indexed[index_low:index_high], alpha=0.4)
-			plt.plot(x[index_low:index_high], -qrs_peaks_indexed[index_low:index_high], 'r', alpha=0.4)
+			plt.plot(x[index_low:index_high], -np.array(qrs_peaks_indexed[index_low:index_high]), 'r', alpha=0.4)
 			plt.plot(x[index_low:index_high], passed_filtered[index_low:index_high], 'g')
 			plt.title("Beats and low-passed signal")
         	
