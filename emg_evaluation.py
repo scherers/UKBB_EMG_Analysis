@@ -78,20 +78,18 @@ def readData(filename):
 
 def thresholdRMSD(rmsd_data, cutoff, delta):
 	print ("RMSD Filter")
-	i = 0
 	index = np.zeros((1,len(rmsd_data)), dtype=int)[0]
-	while i < (len(rmsd_data)):
-		if (i>0) and (np.fmod(i,1000) < 0.001):
-			sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/len(rmsd_data)) )
-			sys.stdout.flush()
-		if rmsd_data[i] < cutoff:
-			index[i] = 1
-			i += 1
-		else:
-			index[max(i-delta, 0):i] = 0
-			i += delta
-	print ('\ndone')
+	index[rmsd_data<cutoff]=1
+	idxdiff = np.diff(index)
+	idx1 = np.nonzero(idxdiff<0)[0]
+	for i in idx1:
+		index[max(0,i+1-delta):i+1]=0
+	idx2 = np.nonzero(idxdiff>0)[0]
+	for i in idx2:
+		index[i+1:min(len(index),i+1+delta)]=0
 	return index
+
+
 
 
 def findPeaks(data, lower_bound):
