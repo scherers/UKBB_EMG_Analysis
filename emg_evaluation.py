@@ -326,7 +326,6 @@ def peak_correction(peaks, f):
 	for i in ind_corr:
 		result[i] = 1
 	
-	print len(f), len(result)
 	return result
 
 
