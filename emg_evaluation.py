@@ -338,7 +338,7 @@ if __name__ == "__main__":
 	parser.add_argument('filename', metavar='Input File', type=str, nargs=1, help='Name of the input file (CSV-File)')
 	parser.add_argument('-l', '--limit', default=0, type=int, required=False)
 	parser.add_argument('-p', '--print_pdf', action='store_true', default=False, dest='boolean_switch_pdf', help='Set a switch to true')
-	parser.add_argument('-hf', '--extra-file', default='', type=str, required=False)
+	parser.add_argument('-hf', '--extra-file', default='', type=str, required=True)
 	args = parser.parse_args()
 
 	if args.extra_file != '':
