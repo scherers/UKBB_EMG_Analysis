@@ -261,12 +261,13 @@ def getDiffVec(v1, v2, v3):
 	return result
 
 def getUsageVec(vec_in, th, delta):
-	result = list(np.ones(len(vec_in)))
+	result = np.ones(len(vec_in))
 	for i in range(0,len(vec_in)):
 		if vec_in[i] > th:
-			for j in range(max(0,i-int(1.2*delta)),min(i+int(1.2*delta),len(vec_in))):
-				result[j] = 0
-	return result
+			#for j in range( max(0,i-int(1.2*delta))  ,  min(i+int(1.2*delta),len(vec_in))    ):
+			#	result[j] = 0
+			result[max(0,i-int(1.2*delta)):min(i+int(1.2*delta),len(vec_in))] = 0
+	return list(result)
 
 def generateDefensiveUsageVector(movie_vec, rmsd_vec, bib_vec):
 	result = []
@@ -297,7 +298,6 @@ def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
 		i += 1
 
 	result2 = list(np.zeros(len(result)))
-	return result2
 
 	d = 2000
 	for i in ind:
