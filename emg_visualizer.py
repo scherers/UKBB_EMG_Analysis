@@ -608,7 +608,8 @@ class VisualizerWindow:
     def _add(self):
         if self.show_debug_msg:
             print('_add()')
-        self.multi_cursor.disconnect()
+        if float(matplotlib.__version__[0:3])>=1.4:
+            self.multi_cursor.disconnect()
         self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='g', lw=1)
         self.span1.disconnect_events()
         self.span2.disconnect_events()
@@ -631,7 +632,8 @@ class VisualizerWindow:
     def _del(self):
         if self.show_debug_msg:
             print('_del()')
-        self.multi_cursor.disconnect()
+        if float(matplotlib.__version__[0:3])>=1.4:
+            self.multi_cursor.disconnect()
         self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='r', lw=1)
         self.span1.disconnect_events()
         self.span1.disconnect_events()
@@ -655,7 +657,8 @@ class VisualizerWindow:
     def _zoom_in(self):
         if self.show_debug_msg:
             print('_zoom_in()')
-        self.multi_cursor.disconnect()
+        if float(matplotlib.__version__[0:3])>=1.4:
+            self.multi_cursor.disconnect()
         self.multi_cursor = MultiCursor(self.fig.canvas, (self.ax1, self.ax2, self.ax3, self.ax4), useblit=True, horizOn=False, vertOn=True, color='b', lw=1)
         self.span1.disconnect_events()
         self.span1.disconnect_events()
