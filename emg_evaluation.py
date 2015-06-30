@@ -332,8 +332,8 @@ def peak_correction(peaks, f):
 			right += 1
 
 	
-	print "left:", left
-	print "right", right
+	print ("left:", left)
+	print ("right", right)
 	
 	ind_corr = []
 	for i in ind:
@@ -645,47 +645,77 @@ if __name__ == "__main__":
 		print ("\r\ndone")
 
 	if args.extra_file != '':
-		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec, f_hf(x))
+		pass
+		#writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec, f_hf(x))
 	else:
 		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec)
 
-	tmp = []
+	found_peaks = []
 	for i in range(0,len(peaks_indexed)):
-		if peaks_indexed[i] == 1:
-			tmp.append(i)
+		if peaks_cleaned[i] == 1:
+			found_peaks.append(i)
 
-	tmp2 = []
-	for i in range(0,len(tmp)-1):
-		if usage_final[tmp[i]] == 1 and usage_final[tmp[i+1]] == 1:
-			diff = (tmp[i+1]-tmp[i])/500.0
-			if diff < 5:
-				tmp2.append(diff)
-	
-	tmp4 = []
-	tmp5 = []
-	tmp6 = []
+	data = []
+	diff_sum = 0
+	for i in range(0,len(found_peaks)-1):
+		diff = (found_peaks[i+1]-found_peaks[i])/500.0
+		data.append([i, diff, diff_sum, usage_final[found_peaks[i]]])
+		diff_sum += diff
+
+	x = []; y = [];
+	for d in data:
+		x.append(d[2])
+		y.append(d[1])
+
+	plt.figure()
+	plt.plot(x,y)
+	plt.title("IBI All")
+	pdf_file = ''.join(filename.split(".")[:-1]) + "_ibi_all.pdf"
+	plt.savefig(pdf_file)
+
+	x = []; y = [];
+	ind = 0
+	for d in data:
+		if d[3] == 1:
+			x.append(ind)
+			ind += 1
+			y.append(d[1])
+
 	w = 5
 	t = 0.05
-	for i in range(w,len(tmp2)-w):
-		mean = np.mean(tmp2[i-w:i+w+1])
-		q = abs(tmp2[i]-mean)
+	outlay_x = []
+	outlay_y = []
+	for i in range(w,len(y)-w):
+		mean = np.mean(y[i-w:i+w+1])
+		q = abs(y[i]-mean)
 		if q > t:
-			tmp4.append(i)
-			tmp5.append(tmp2[i])
-		else:
-			tmp6.append(tmp2[i])
-
-	plt.figure()
-	plt.plot(tmp2)
-
-	print (len(tmp4), "outlayers found")
-	plt.plot(tmp4, tmp5, 'or', alpha=0.6)
-	pdf_file3 = ''.join(filename.split(".")[:-1]) + "_ibi.pdf"
-	plt.savefig(pdf_file3)
-
-	plt.figure()
-	plt.plot(tmp6)
-	pdf_file4 = ''.join(filename.split(".")[:-1]) + "_ibi_clean.pdf"
-	plt.savefig(pdf_file4)
-
+			outlay_x.append(i)
+			outlay_y.append(y[i])
 	
+	print (len(outlay_x), "outlayers")
+
+	plt.figure()
+	plt.plot(x,y)
+	plt.plot(outlay_x, outlay_y, 'or', alpha=0.6)
+	plt.title("IBI Used")
+	pdf_file = ''.join(filename.split(".")[:-1]) + "_ibi_cleaned.pdf"
+	plt.savefig(pdf_file)
+
+	for ind in outlay_x:
+		val_sum = 0
+		n = 0
+		for i in range(ind-5, ind+5+1):
+			if (i!=ind) and (i not in outlay_x):
+				val_sum += y[i]
+				n += 1
+		if n>0:
+			y[ind] = float(val_sum) / float(n)
+
+	plt.figure()
+	plt.plot(x,y)
+	plt.title("IBI Used")
+	pdf_file = ''.join(filename.split(".")[:-1]) + "_ibi_corrected.pdf"
+	plt.savefig(pdf_file)
+
+
+
