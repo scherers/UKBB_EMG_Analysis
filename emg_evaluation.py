@@ -261,12 +261,13 @@ def getDiffVec(v1, v2, v3):
 	return result
 
 def getUsageVec(vec_in, th, delta):
-	result = list(np.ones(len(vec_in)))
+	result = np.ones(len(vec_in))
 	for i in range(0,len(vec_in)):
 		if vec_in[i] > th:
-			for j in range(max(0,i-int(1.2*delta)),min(i+int(1.2*delta),len(vec_in))):
-				result[j] = 0
-	return result
+			#for j in range( max(0,i-int(1.2*delta))  ,  min(i+int(1.2*delta),len(vec_in))    ):
+			#	result[j] = 0
+			result[max(0,i-int(1.2*delta)):min(i+int(1.2*delta),len(vec_in))] = 0
+	return list(result)
 
 def generateDefensiveUsageVector(movie_vec, rmsd_vec, bib_vec):
 	result = []
@@ -302,25 +303,49 @@ def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
 	for i in ind:
 		if np.max(diff_vec[i-d:i+d]) > 0.2:
 			result2[int(i)] = 1
-			minutes = (i/500)/60
+			minutes = int(i/500)//60
 			sec = int(60*((i/500)/60.0 - minutes))
 			print ("\tjump-position found:", minutes, "mins", sec, "secs")
 	print ("done")
 	return result2
 
 def peak_correction(peaks, f):
-	dx = 25	
+	dx = 25
 	ind = []
-	for i in range(dx,len(peaks)-3*dx-3):
+	for i in range(2*dx,len(peaks)-3*dx-3):
 		if peaks[i] == 1:
 			ind.append(i)
+
+	left = 0
+	right = 0
+	for i in ind:
+		tmp = f[i-dx:i+dx+1]
+		ind_temp = np.argmin(tmp)-dx+i
+		tmp2 = f[ind_temp:ind_temp+2*dx]
+		ind_temp2 = np.argmax(tmp2)+ind_temp
+		if (ind_temp2-ind_temp) > dx/2:
+			left += 1
+			tmp2 = f[ind_temp-2*dx:ind_temp]
+			offset = len(tmp2) - np.argmax(tmp2)
+			ind_temp2 = ind_temp - offset
+		else:
+			right += 1
+
+	
+	print "left:", left
+	print "right", right
 	
 	ind_corr = []
 	for i in ind:
 		tmp = f[i-dx:i+dx+1]
 		ind_temp = np.argmin(tmp)-dx+i
 		tmp2 = f[ind_temp:ind_temp+2*dx]
-		ind_corr.append(np.argmax(tmp2)+ind_temp)
+		ind_temp2 = np.argmax(tmp2)+ind_temp
+		if left>right:
+			tmp2 = f[ind_temp-2*dx:ind_temp]
+			offset = len(tmp2) - np.argmax(tmp2)
+			ind_temp2 = ind_temp - offset
+		ind_corr.append(ind_temp2)
 
 	result = list(np.zeros(len(peaks)))
 	for i in ind_corr:
@@ -362,6 +387,8 @@ if __name__ == "__main__":
 
 	if args.extra_file != '':
 		[hf_x, hf_y] = extractHFFromFile(args.extra_file)
+		hf_x.append(x[-1] + 1)
+		hf_y.append(2)
 		f_hf = interp1d(hf_x, hf_y)
 	
 
