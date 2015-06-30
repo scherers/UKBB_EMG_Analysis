@@ -255,7 +255,8 @@ class VisualizerWindow:
         elif '"usage_total"' in self.dataMgr.usage_columns:
             self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_total"'))
         else:
-            self.usg_man_select.current(0)
+            if len(self.dataMgr.usage_columns) > 0:
+                self.usg_man_select.current(0)
 
 
         Tk.Label(self.configFrame, text="\r\nJump Column").pack()
