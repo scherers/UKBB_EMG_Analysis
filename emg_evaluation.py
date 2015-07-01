@@ -116,6 +116,7 @@ def detectQRS(emg):
 	# CAUTION: Hardcoded for a sampling frequency of 500Hz!
 
 	# differentiator with 62.5 Hz notch filter
+	print("start QRS")
 	y0 = np.zeros((1,len(emg)), dtype=float)[0]
 	
 	for n in range(8, len(emg)-6):
@@ -156,6 +157,7 @@ def detectQRS(emg):
          if qrsflag > 0:
              qrs.append(i)
 	
+	print("QRS done")
 	return qrs
 
 def getTimeString(t):
@@ -513,7 +515,7 @@ if __name__ == "__main__":
 	for q in qrs_beats:
          qrs_peaks[q] = 1
 
-	qrs_peaks = peak_correction(list(qrs_peaks), y)
+	#qrs_peaks = peak_correction(list(qrs_peaks), y)
 
 	int_x_qrs, int_y_qrs = getBeatVectorsForInt(x, qrs_peaks)
 	f_qrs = interp1d(int_x_qrs, int_y_qrs)
