@@ -38,9 +38,9 @@ def HMS(seconds, pos):
 	pos -- somehow required argument (matplotlib)
 	"""
 	seconds = int(seconds)
-	hours = seconds / 3600
+	hours = seconds // 3600
 	seconds -= 3600 * hours
-	minutes = seconds / 60
+	minutes = seconds // 60
 	seconds -= 60 * minutes
 	if hours == 0:
 		if minutes == 0:
@@ -162,9 +162,9 @@ def detectQRS(emg):
 
 def getTimeString(t):
 	seconds = int(t)
-	hours = seconds / 3600
+	hours = seconds // 3600
 	seconds -= 3600 * hours
-	minutes = seconds / 60
+	minutes = seconds // 60
 	seconds -= 60 * minutes
 	return str(hours) + ":" + str(minutes) + ":" + str(seconds)
 
@@ -185,7 +185,7 @@ def writeCSV(filename, time_as_string, usage_md, usage_rmsd, f, rmsd, beat, beat
 	content.append(header)
 
 	for i in range(0,len(time_as_string)):
-		if (i>0) and (np.fmod(i,1000) < 0.001):
+		if (i>0) and (np.fmod(i,10000) < 0.001):
 			sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/len(time_as_string)) )
 			sys.stdout.flush()
 		result = time_as_string[i] + ","
@@ -273,6 +273,7 @@ def getUsageVec(vec_in, th, delta):
 
 def generateDefensiveUsageVector(movie_vec, rmsd_vec, bib_vec):
 	result = []
+	print("debug", len(movie_vec), len(rmsd_vec), len(bib_vec))
 	for i in range(0,len(movie_vec)):
 		if movie_vec[i] == 1 and rmsd_vec[i] == 1 and bib_vec[i] == 1:
 			result.append(1)
@@ -299,20 +300,22 @@ def generateIBIJumpVector(movie_vec, rmsd_vec, bib_vec, delta, diff_vec):
 				i += 1
 		i += 1
 
-	result2 = list(np.zeros(len(result)))
+	result2 = list(np.zeros(len(movie_vec)))
 
 	d = 2000
 	for i in ind:
 		if np.max(diff_vec[i-d:i+d]) > 0.2:
-			result2[int(i)] = 1
-			minutes = int(i/500)//60
-			sec = int(60*((i/500)/60.0 - minutes))
-			print ("\tjump-position found:", minutes, "mins", sec, "secs")
+			if int(i) < len(result2):
+				result2[int(i)] = 1
+				minutes = int(i/500)//60
+				sec = int(60*((i/500)/60.0 - minutes))
+				print ("\tjump-position found:", minutes, "mins", sec, "secs")
 	print ("done")
 	return result2
 
+
 def peak_correction(peaks, f):
-	dx = 25
+	dx = 15
 	ind = []
 	for i in range(2*dx,len(peaks)-3*dx-3):
 		if peaks[i] == 1:
@@ -356,6 +359,29 @@ def peak_correction(peaks, f):
 	return result
 
 
+def peak_correction2(peaks, f, mode, offset):
+	dx = 12
+	ind = []
+	for i in range(2*dx,len(peaks)-3*dx-3):
+		if peaks[i] == 1:
+			ind.append(i)
+
+	ind_corr = []
+	for i in ind:
+		tmp = f[i-dx+offset:i+dx+1+offset]
+		if mode == 1:
+			ind_new = np.argmax(tmp)-dx+i+offset
+		else:
+			ind_new = np.argmin(tmp)-dx+i+offset
+		ind_corr.append(ind_new)
+	
+	result = list(np.zeros(len(peaks)))
+	for i in ind_corr:
+		result[i] = 1
+	
+	return result
+
+
 if __name__ == "__main__":
 	#print 'Number of arguments:', len(sys.argv), 'arguments.'
 	#print 'Argument List:', str(sys.argv)
@@ -364,7 +390,13 @@ if __name__ == "__main__":
 	parser.add_argument('filename', metavar='Input File', type=str, nargs=1, help='Name of the input file (CSV-File)')
 	parser.add_argument('-l', '--limit', default=0, type=int, required=False)
 	parser.add_argument('-p', '--print_pdf', action='store_true', default=False, dest='boolean_switch_pdf', help='Set a switch to true')
+	parser.add_argument('-b', '--print_beat', action='store_true', default=False, dest='boolean_switch_beat', help='Set a switch')
 	parser.add_argument('-hf', '--extra-file', default='', type=str, required=True)
+	
+	parser.add_argument('-min', '--min', action='store_true', default=False, dest='boolean_switch_min', help='Set a switch')
+	parser.add_argument('-max', '--max', action='store_true', default=False, dest='boolean_switch_max', help='Set a switch')
+	parser.add_argument('-off', '--offset', default='0', type=int, required=False)
+
 	args = parser.parse_args()
 
 	if args.extra_file != '':
@@ -374,6 +406,20 @@ if __name__ == "__main__":
 
 	#Flag for writing PDFs (or just CSV)
 	writePDF = args.boolean_switch_pdf
+	writeBeat = args.boolean_switch_beat
+
+	print(args.boolean_switch_max, args.boolean_switch_min, args.offset)
+
+	if args.boolean_switch_max:
+		manual_peak_mode = 1
+	elif args.boolean_switch_min:
+		manual_peak_mode = 0
+	else:
+		manual_peak_mode = None
+
+	print("manual_peak", manual_peak_mode)
+	
+	manual_offset = int(args.offset)
 
 	if writePDF:
 		pdf_file = ''.join(filename.split(".")[:-1]) + ".pdf"
@@ -387,21 +433,15 @@ if __name__ == "__main__":
 	
 	[y_raw, rmsd, x, usage_vec, t_string] = readData(filename)
 
-	if args.extra_file != '':
-		[hf_x, hf_y] = extractHFFromFile(args.extra_file)
-		hf_x.append(x[-1] + 1)
-		hf_y.append(2)
-		f_hf = interp1d(hf_x, hf_y)
-	
-
 	limit_manual = min(int(args.limit * 60 * 500), len(y_raw))
 	if limit_manual == 0:
 		limit_manual = len(y_raw)
 
-	limit = int(60 * 500 * (limit_manual / (60*500) ))
+	limit = int(60 * 500 * (limit_manual // (60*500) ))
 
+	raw_length = len(y_raw)
 	y_raw = y_raw[:limit]
-	lowpass_y = lowpass(y_raw,0.6)
+	lowpass_y = lowpass(y_raw,10.0)
 
 	y = []
 	for i in range(0,len(y_raw)):
@@ -425,20 +465,33 @@ if __name__ == "__main__":
 	usage_vec = usage_vec[:limit]
 	t_string = t_string[:limit]
 
+	if args.extra_file != '':
+		[hf_x, hf_y] = extractHFFromFile(args.extra_file)
+
+		print(len(hf_x), len(hf_y), raw_length)
+
+		hf_x = hf_x[:limit]
+		hf_y = hf_y[:limit]
+
+		hf_x.append(x[-1] + 10)
+		hf_y.append(2)
+		f_hf = interp1d(hf_x, hf_y)
+
 	delta = 4000	
 	index = thresholdRMSD(rmsd, rmsd_cutoff, delta)
 
-	peak_clean_range = int(500 / 5)
+	peak_clean_range = int(500 // 4)
 
 	if abs(np.mean(y)) > 0:
 		peak_value = 0
-		y_squared = np.array(y)**2
-		th = 10.0*np.std(np.array(y)**2)
+		y_squared = np.abs(np.array(y))
+		th = 6.0*np.std(np.abs(np.array(y)))
 		#th = 5000
 		n_peaks_vec = []
 		th_vec = []
 		peak_old = -10
-		while peak_value < 4:
+		d_th = min(th*0.005,10)
+		while peak_value < 3.5:
 			peaks = findPeaks(y_squared, th)
 			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
 			peaks_indexed = np.array(index) * np.array(peaks_cleaned)
@@ -447,11 +500,11 @@ if __name__ == "__main__":
 			n_peaks_vec.append(peak_value)
 			th_vec.append(th)
 			
-			if peak_value > 1 and abs(peak_value-peak_old) < 0.001:
+			if peak_value > 1 and abs(peak_value-peak_old) < 0.00001:
 				break
 
 			peak_old = peak_value
-			th *= 0.9
+			th -= d_th
 
 		plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
 			
@@ -471,12 +524,73 @@ if __name__ == "__main__":
 		print ('no values')
 		th = 1
 
-	peaks = findPeaks(np.array(y)**2, th)
+	peaks = findPeaks(np.abs(np.array(y)), th)
 	peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
 
-	peaks_cleaned = peak_correction(peaks_cleaned, y)
+	w = 100
+	ave_peak = np.zeros(w)
+	ave_peak2 = np.zeros(w)
+	n = 0
+	m = 0
+	plt.figure()
+	for i in range(w,len(peaks_cleaned)-w):
+		if peaks_cleaned[i] == 1:
+			ave_peak += np.array(y[i-w//2:i+w//2])
+			ave_peak2 += np.array(y[i-w//2:i+w//2])
+			n += 1
+			m += 1
+			if m == 50:
+				plt.plot(ave_peak2/m, 'b', alpha=0.1)
+				ave_peak2 = np.zeros(w)
+				m = 0
+	ave_peak /= n
+	plt.savefig(''.join(filename.split(".")[:-1]) + "_all_beat.pdf")
+
+	beat_ave_val = np.mean(ave_peak)
+
+	pdf_file_beat = ''.join(filename.split(".")[:-1]) + "_ave_beat.pdf"
+	plt.figure()
+	plt.plot(ave_peak)
+	plt.plot(w//2, ave_peak[w//2], 'or', alpha=0.6)
+
+	if ave_peak[w//2] < beat_ave_val:
+		plt.title('going for min')
+		corr_mode = 0
+	else:
+		plt.title('going for max')
+		corr_mode = 1
+
+	plt.savefig(pdf_file_beat)
+
+	#peaks_cleaned = peak_correction(peaks_cleaned, y)
+
+	if manual_peak_mode != None:
+		corr_mode = manual_peak_mode
+		corr_offset = manual_offset
+	else:
+		corr_offset = 0
+
+	peaks_cleaned = peak_correction2(peaks_cleaned, y, corr_mode, corr_offset)
 
 	peaks_indexed = np.array(index) * np.array(peaks_cleaned)
+
+	w = 100
+	ave_peak = np.zeros(w)
+	m = 0
+	plt.figure()
+	for i in range(w,len(peaks_indexed)-w):
+		if peaks_indexed[i] == 1:
+			ave_peak += np.array(y[i-w//2:i+w//2])
+			m += 1
+			if m == 50:
+				plt.plot(ave_peak/m, 'r', alpha=0.1)
+				ave_peak = np.zeros(w)
+				m = 0
+	plt.savefig(''.join(filename.split(".")[:-1]) + "_all_clean_beat.pdf")
+
+	if writeBeat:
+		sys.exit(0)
+
 		
 	passed = lowpass(y, lp)
 	passed_filtered = np.clip(passed,-3, 3) * np.array(index)
@@ -718,6 +832,8 @@ if __name__ == "__main__":
 	plt.title("IBI Used")
 	pdf_file = ''.join(filename.split(".")[:-1]) + "_ibi_corrected.pdf"
 	plt.savefig(pdf_file)
+
+	print("Processing successfully done")
 
 
 
