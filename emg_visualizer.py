@@ -747,8 +747,9 @@ class VisualizerWindow:
         savetxt.remove()
         self.fig.canvas.draw()
         if os.path.isfile(self.autosave_file):
-            print('deleting autosave file "{}"'.format(self.autosave_file))
-            os.remove(self.autosave_file)
+            archive_filename = self.autosave_file.rsplit(".", 1)[0] + "_old.pkl"
+            print('renaming autosave file from "{}" to "{}"'.format(self.autosave_file, archive_filename))
+            os.rename(self.autosave_file, archive_filename)
         
         
     def _autosave(self):
