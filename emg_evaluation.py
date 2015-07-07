@@ -396,6 +396,7 @@ if __name__ == "__main__":
 	parser.add_argument('-min', '--min', action='store_true', default=False, dest='boolean_switch_min', help='Set a switch')
 	parser.add_argument('-max', '--max', action='store_true', default=False, dest='boolean_switch_max', help='Set a switch')
 	parser.add_argument('-off', '--offset', default='0', type=int, required=False)
+	parser.add_argument('-sd', '--sd_th', default='1', type=float, required=False)
 
 	args = parser.parse_args()
 
@@ -407,6 +408,7 @@ if __name__ == "__main__":
 	#Flag for writing PDFs (or just CSV)
 	writePDF = args.boolean_switch_pdf
 	writeBeat = args.boolean_switch_beat
+	sd_th = args.sd_th
 
 	print(args.boolean_switch_max, args.boolean_switch_min, args.offset)
 
@@ -450,7 +452,11 @@ if __name__ == "__main__":
 	print ('RMSD Stat (mean,std)', np.mean(rmsd), np.std(rmsd))
 	print ('F Stat (mean,std)', np.mean(y), np.std(y))
 	
-	rmsd_cutoff = min(np.mean(rmsd)+np.std(rmsd), 2*np.mean(rmsd))
+	if sd_th != 1:
+		rmsd_cutoff = np.float64(sd_th)
+	else:
+		rmsd_cutoff = np.float64(min(np.mean(rmsd)+0.6*np.std(rmsd), 2*np.mean(rmsd)))
+
 	print ("rmsd-cutoff", rmsd_cutoff)
 
 	peak_cutoff =  2*np.std(y)
@@ -485,13 +491,15 @@ if __name__ == "__main__":
 	if abs(np.mean(y)) > 0:
 		peak_value = 0
 		y_squared = np.abs(np.array(y))
-		th = 6.0*np.std(np.abs(np.array(y)))
+		th = 10.0*np.std(np.abs(np.array(y)))
 		#th = 5000
 		n_peaks_vec = []
 		th_vec = []
 		peak_old = -10
 		d_th = min(th*0.005,10)
+		count = 0
 		while peak_value < 3.5:
+			count += 1
 			peaks = findPeaks(y_squared, th)
 			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
 			peaks_indexed = np.array(index) * np.array(peaks_cleaned)
@@ -499,6 +507,11 @@ if __name__ == "__main__":
 			print ("\tpeak value", peak_value, th)
 			n_peaks_vec.append(peak_value)
 			th_vec.append(th)
+
+			if count > 200 and peak_value<0.2:
+				d_th = 1
+			if count > 400 and peak_value<0.2:
+				d_th = 0.2
 			
 			if peak_value > 1 and abs(peak_value-peak_old) < 0.00001:
 				break
@@ -761,8 +774,8 @@ if __name__ == "__main__":
 		print ("\r\ndone")
 
 	if args.extra_file != '':
-		pass
-		#writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec, f_hf(x))
+		#pass
+		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec, f_hf(x))
 	else:
 		writeCSV(csv_out_file, t_string, usage_vec, index, y, rmsd, peaks_indexed, peaks_cleaned, qrs_peaks, passed, passed_filtered, f_peak(x), f_qrs(x), v6, usage_final, jump_vec)
 
