@@ -2,6 +2,7 @@
 
 import sys
 import os.path
+import pickle
 
 if sys.version_info[0] < 3:
     import Tkinter as Tk
@@ -125,7 +126,7 @@ class DataManager:
     def writeCSV(self, filename, manual_usg):
         outfile = open(filename, 'w')
     
-        print("writing output")
+        print("saving to file ({})".format(filename))
         
         header = '{},"usage_manual"\r\n'.format(self.header_line.replace(',"usage_manual"', '').rstrip('\r\n'))
         outfile.write(header)
@@ -139,6 +140,13 @@ class DataManager:
             outfile.write(result)
         outfile.close()
         print("\r\ndone")
+        
+    def writeAutoSave(self, autosave_filename, manual_usg):
+        outfile = open(autosave_filename, 'wb')
+        print("autosaving to file ({})".format(autosave_filename))
+        pickle.dump(manual_usg, outfile)
+        outfile.close()
+        print("done")
 
 
 
@@ -165,7 +173,8 @@ class VisualizerWindow:
     show_debug_msg = False
     
     #autosave (-1 for disable)
-    autosave = 30
+    autosave_period = 30
+    load_autosave_file = False
 
     
     def __init__(self, filename):        
@@ -184,19 +193,41 @@ class VisualizerWindow:
              if not filename:
                  sys.exit(0)
         
-        self.root.wm_title("EMG-Visualization-Tool: {}".format(filename))
-        self.dataMgr = DataManager(filename)     
+        if filename[-19:] == '_usage_autosave.pkl':
+            self.autosave_file = filename
+            print('Input file is an Auto-Save file "{}"'.format(self.autosave_file))
+            filename = filename[:-19] + '.csv'
+            if not os.path.isfile(filename):
+                showerror('Could not find file "{}" (matching to provided auto-save file "{}")'.format(filename, self.autosave_file))
+                print('Error: matching file not found (expected "{}")'.format(filename))
+                print('EXIT')
+                sys.exit(0)
+            else:
+                self.load_autosave_file = True
+        else:
+            self.autosave_file = filename.rsplit(".", 1)[0] + "_usage_autosave.pkl"
+            if os.path.isfile(self.autosave_file):
+                print('Auto-Save file "{}" already exists'.format(self.autosave_file))
+                if askyesno('Auto-Save file found', 'Auto-Save file "{}" found. Load it instead? ("No" will result in automatical overwriting of the file when auto-saving)'.format(self.autosave_file)):
+                    self.load_autosave_file = True
         
-        self.csv_out_file = ''.join(filename.split(".")[:-1]) + "_usage.csv"
+        
+        self.root.wm_title("EMG-Visualization-Tool: {}".format(filename))
+        self.dataMgr = DataManager(filename)
+                
+        
+        self.csv_out_file = filename.rsplit(".", 1)[0] + "_usage.csv"
         
         while os.path.isfile(self.csv_out_file):
             print('File "{}" already exists'.format(self.csv_out_file))
             if askyesno('Overwrite File?', 'File "{}" already exists. Overwrite?'.format(self.csv_out_file)):
+                print('overwriting "{}"'.format(self.csv_out_file))
                 break
             else:
                 new_out_file = asksaveasfilename(initialfile=self.csv_out_file)
                 if new_out_file:
                     self.csv_out_file = new_out_file
+                    print('New Output file "{}"'.format(self.csv_out_file))
                 else:
                     sys.exit(0)
                     
@@ -247,16 +278,19 @@ class VisualizerWindow:
                 self.usage_plots[usg] = chkbx_var
 
         Tk.Label(self.configFrame, text="\r\nLoad/copy \"usage_manual\" from").pack()
-        self.usg_man_select = ttk.Combobox(self.configFrame, values=self.dataMgr.usage_columns, state="readonly")
-        self.usg_man_select.pack()
-        
-        if '"usage_manual"' in self.dataMgr.usage_columns:
-            self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_manual"'))
-        elif '"usage_total"' in self.dataMgr.usage_columns:
-            self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_total"'))
+        if self.load_autosave_file:
+            Tk.Label(self.configFrame, text="provided Auto-Save file").pack()
         else:
-            if len(self.dataMgr.usage_columns) > 0:
-                self.usg_man_select.current(0)
+            self.usg_man_select = ttk.Combobox(self.configFrame, values=self.dataMgr.usage_columns, state="readonly")
+            self.usg_man_select.pack()
+            
+            if '"usage_manual"' in self.dataMgr.usage_columns:
+                self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_manual"'))
+            elif '"usage_total"' in self.dataMgr.usage_columns:
+                self.usg_man_select.current(self.dataMgr.usage_columns.index('"usage_total"'))
+            else:
+                if len(self.dataMgr.usage_columns) > 0:
+                    self.usg_man_select.current(0)
 
 
         Tk.Label(self.configFrame, text="\r\nJump Column").pack()
@@ -309,7 +343,13 @@ class VisualizerWindow:
     
         button_add = Tk.Button(master=self.visualizerFrame, text='Add', command=self._add)
         button_del = Tk.Button(master=self.visualizerFrame, text='Del', command=self._del)
-        button_save = Tk.Button(master=self.visualizerFrame, text='Save', command=self._save)
+        
+        saveFrame = Tk.Frame(self.visualizerFrame)
+        button_autosave = Tk.Button(master=saveFrame, text='Auto-Save', command=self._autosave)
+        button_save = Tk.Button(master=saveFrame, text='Save', command=self._save)
+        button_autosave.grid(column=0, row=0)
+        button_save.grid(column=1, row=0)
+        
         button_quit = Tk.Button(master=self.visualizerFrame, text='Quit', command=self._quit)
         
         # Selection
@@ -334,7 +374,7 @@ class VisualizerWindow:
         button_add.grid(column=0, row=2)
         button_del.grid(column=1, row=2)
         self.mode_label.grid(column=2, row=2, columnspan=2)
-        button_save.grid(column=4, row=2)
+        saveFrame.grid(column=4, row=2)
         button_quit.grid(column=5, row=2)
     
         Tk.mainloop()       
@@ -359,10 +399,13 @@ class VisualizerWindow:
                 self.usage_names.append(k)
                 self.usage_cols.append(self.dataMgr.header_columns.index(k))
         
-        if self.usg_man_select.get() in self.dataMgr.header_columns:
-            usg_manual_col = self.dataMgr.header_columns.index(self.usg_man_select.get())
-        else:
+        if self.load_autosave_file:
             usg_manual_col = -1
+        else:
+            if self.usg_man_select.get() in self.dataMgr.header_columns:
+                usg_manual_col = self.dataMgr.header_columns.index(self.usg_man_select.get())
+            else:
+                usg_manual_col = -1
             
         if self.jmp_select.get() in self.dataMgr.jump_columns:
             jmp_col = self.dataMgr.header_columns.index(self.jmp_select.get())
@@ -370,6 +413,11 @@ class VisualizerWindow:
             jmp_col = -1
         
         [self.x, self.plot_data, self.usage_data, self.usage_manual, self.jump_positions] = self.dataMgr.readData(self.plot_cols,self.usage_cols,self.loading_label, usg_manual_col, jmp_col)
+
+        if self.load_autosave_file:
+            infile = open(self.autosave_file, 'rb')
+            self.usage_manual = pickle.load(infile)
+            infile.close()
 
         self.configFrame.pack_forget()
         self.visualizerFrame.pack()
@@ -531,6 +579,8 @@ class VisualizerWindow:
             self._zoom_out()
         elif event.key == 'r':
             self._save()
+        elif event.key == 'f':
+            self._autosave()
         elif event.key == 'x':
             self._prevJump()
         elif event.key == 'c':
@@ -595,10 +645,10 @@ class VisualizerWindow:
             
 
     def loadPage(self, page_num):
-        if self.autosave > -1 and page_num % self.autosave == 0:
+        if self.autosave_period > -1 and page_num % self.autosave_period == 0:
             if self.show_debug_msg:
                 print('autosaving on page {}'.format(page_num))
-            self._save()
+            self._autosave()
         self.dataMgr.current_page = min(max(1, page_num), self.dataMgr.num_pages)
         if self.show_debug_msg:
             print('loadPage(): {}'.format(self.dataMgr.current_page))
@@ -691,9 +741,24 @@ class VisualizerWindow:
     def _save(self):
         if self.show_debug_msg:
             print('_save()')
-        plt.text(20, 20, 'autosaving...', fontsize=46, color='r', weight='bold', ha='center', va='top')
+        savetxt = plt.text(20, 20, 'saving...', fontsize=46, color='r', weight='bold', ha='center', va='top')
         self.fig.canvas.draw()
         self.dataMgr.writeCSV(self.csv_out_file, self.usage_manual)
+        savetxt.remove()
+        self.fig.canvas.draw()
+        if os.path.isfile(self.autosave_file):
+            print('deleting autosave file "{}"'.format(self.autosave_file))
+            os.remove(self.autosave_file)
+        
+        
+    def _autosave(self):
+        if self.show_debug_msg:
+            print('_autosave()')
+        savetxt = plt.text(20, 20, 'autosaving...', fontsize=46, color='r', weight='bold', ha='center', va='top')
+        self.fig.canvas.draw()
+        self.dataMgr.writeAutoSave(self.autosave_file, self.usage_manual)
+        savetxt.remove()
+        self.fig.canvas.draw()
 
 
 if __name__ == "__main__":
