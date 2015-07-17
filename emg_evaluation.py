@@ -1,13 +1,20 @@
 import sys
 
+import matplotlib
+# Force matplotlib to not use any Xwindows backend.
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+
 
 import numpy as np
 from numpy.fft import fft, ifft, fftshift
 import copy
 from scipy.interpolate import interp1d
 from scipy import signal
+
+import math
 
 import argparse
 
@@ -479,7 +486,7 @@ if __name__ == "__main__":
 		hf_x = hf_x[:limit]
 		hf_y = hf_y[:limit]
 
-		hf_x.append(x[-1] + 10)
+		hf_x.append(x[-1] + 100000)
 		hf_y.append(2)
 		f_hf = interp1d(hf_x, hf_y)
 
@@ -488,7 +495,7 @@ if __name__ == "__main__":
 
 	peak_clean_range = int(500 // 4)
 
-	if abs(np.mean(y)) > 0:
+	if (np.max(y) != np.min(y)):
 		peak_value = 0
 		y_squared = np.abs(np.array(y))
 		th = 10.0*np.std(np.abs(np.array(y)))
@@ -504,6 +511,11 @@ if __name__ == "__main__":
 			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
 			peaks_indexed = np.array(index) * np.array(peaks_cleaned)
 			peak_value = 500 * np.mean(np.array(peaks_indexed)) / np.mean(np.array(index))
+
+			if math.isnan(peak_value):
+				print("NAN issue")
+				sys.exit(-1)
+
 			print ("\tpeak value", peak_value, th)
 			n_peaks_vec.append(peak_value)
 			th_vec.append(th)
@@ -531,11 +543,13 @@ if __name__ == "__main__":
 
 		ind = th_vec.index(th)
 		plt.plot(ind, n_peaks_vec[ind], 'o')
+		plt.title("Optimal TH = " + str(th))
 		plt.savefig(pdf_file_peakfitting)
 
 	else:
 		print ('no values')
 		th = 1
+		sys.exit(-1)
 
 	peaks = findPeaks(np.abs(np.array(y)), th)
 	peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
@@ -599,9 +613,11 @@ if __name__ == "__main__":
 				plt.plot(ave_peak/m, 'r', alpha=0.1)
 				ave_peak = np.zeros(w)
 				m = 0
+	print ("saving corr_beat to:", ''.join(filename.split(".")[:-1]) + "_all_clean_beat.pdf")
 	plt.savefig(''.join(filename.split(".")[:-1]) + "_all_clean_beat.pdf")
 
 	if writeBeat:
+		print('beat done')
 		sys.exit(0)
 
 		
@@ -635,6 +651,8 @@ if __name__ == "__main__":
 				beat_int_y.append(1.0/(float(dx)/500))
 
 	int_x_peak, int_y_peak = getBeatVectorsForInt(x, peaks_cleaned)
+	int_x_peak.append(int_x_peak[-1]+10000)
+	int_y_peak.append(int_y_peak[-1])
 	f_peak = interp1d(int_x_peak, int_y_peak)
 
 	qrs_beats = detectQRS(y)
@@ -645,6 +663,8 @@ if __name__ == "__main__":
 	#qrs_peaks = peak_correction(list(qrs_peaks), y)
 
 	int_x_qrs, int_y_qrs = getBeatVectorsForInt(x, qrs_peaks)
+	int_x_qrs.append(int_x_qrs[-1] + 10000)
+	int_y_qrs.append(int_y_qrs[-1])
 	f_qrs = interp1d(int_x_qrs, int_y_qrs)
 
 	print ("preparing vecs")
