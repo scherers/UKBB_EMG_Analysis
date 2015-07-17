@@ -431,13 +431,13 @@ if __name__ == "__main__":
 	manual_offset = int(args.offset)
 
 	if writePDF:
-		pdf_file = ''.join(filename.split(".")[:-1]) + ".pdf"
+		pdf_file = filename.rsplit(".",1)[0] + ".pdf"
 		print ("pdf-file:", pdf_file)
 
-	pdf_file_peakfitting = ''.join(filename.split(".")[:-1]) + "_peak_fitting.pdf"
+	pdf_file_peakfitting = filename.rsplit(".",1)[0] + "_peak_fitting.pdf"
 	print ("pdf-file2:", pdf_file_peakfitting)
 
-	csv_out_file = ''.join(filename.split(".")[:-1]) + "_eval.csv"
+	csv_out_file = filename.rsplit(".",1)[0] + "_eval.csv"
 	print ("csv-out-file:", csv_out_file)
 	
 	[y_raw, rmsd, x, usage_vec, t_string] = readData(filename)
@@ -571,11 +571,11 @@ if __name__ == "__main__":
 				ave_peak2 = np.zeros(w)
 				m = 0
 	ave_peak /= n
-	plt.savefig(''.join(filename.split(".")[:-1]) + "_all_beat.pdf")
+	plt.savefig(filename.rsplit(".",1)[0] + "_all_beat.pdf")
 
 	beat_ave_val = np.mean(ave_peak)
 
-	pdf_file_beat = ''.join(filename.split(".")[:-1]) + "_ave_beat.pdf"
+	pdf_file_beat = filename.rsplit(".",1)[0] + "_ave_beat.pdf"
 	plt.figure()
 	plt.plot(ave_peak)
 	plt.plot(w//2, ave_peak[w//2], 'or', alpha=0.6)
@@ -613,8 +613,9 @@ if __name__ == "__main__":
 				plt.plot(ave_peak/m, 'r', alpha=0.1)
 				ave_peak = np.zeros(w)
 				m = 0
+
 	print ("saving corr_beat to:", ''.join(filename.split(".")[:-1]) + "_all_clean_beat.pdf")
-	plt.savefig(''.join(filename.split(".")[:-1]) + "_all_clean_beat.pdf")
+	plt.savefig(filename.rsplit(".",1)[0] + "_all_clean_beat.pdf")
 
 	if writeBeat:
 		print('beat done')
@@ -819,7 +820,7 @@ if __name__ == "__main__":
 	plt.figure()
 	plt.plot(x,y)
 	plt.title("IBI All")
-	pdf_file = ''.join(filename.split(".")[:-1]) + "_ibi_all.pdf"
+	pdf_file = filename.rsplit(".",1)[0] + "_ibi_all.pdf"
 	plt.savefig(pdf_file)
 
 	x = []; y = [];
@@ -847,7 +848,7 @@ if __name__ == "__main__":
 	plt.plot(x,y)
 	plt.plot(outlay_x, outlay_y, 'or', alpha=0.6)
 	plt.title("IBI Used")
-	pdf_file = ''.join(filename.split(".")[:-1]) + "_ibi_cleaned.pdf"
+	pdf_file = filename.rsplit(".",1)[0] + "_ibi_cleaned.pdf"
 	plt.savefig(pdf_file)
 
 	for ind in outlay_x:
@@ -863,7 +864,7 @@ if __name__ == "__main__":
 	plt.figure()
 	plt.plot(x,y)
 	plt.title("IBI Used")
-	pdf_file = ''.join(filename.split(".")[:-1]) + "_ibi_corrected.pdf"
+	pdf_file = filename.rsplit(".",1)[0] + "_ibi_corrected.pdf"
 	plt.savefig(pdf_file)
 
 	print("Processing successfully done")
