@@ -404,6 +404,7 @@ if __name__ == "__main__":
 	parser.add_argument('-max', '--max', action='store_true', default=False, dest='boolean_switch_max', help='Set a switch')
 	parser.add_argument('-off', '--offset', default='0', type=int, required=False)
 	parser.add_argument('-sd', '--sd_th', default='1', type=float, required=False)
+	parser.add_argument('-th', '--peak_th', default='-1', type=float, required=False)
 
 	args = parser.parse_args()
 
@@ -429,6 +430,8 @@ if __name__ == "__main__":
 	print("manual_peak", manual_peak_mode)
 	
 	manual_offset = int(args.offset)
+
+	manual_th = float(args.peak_th)
 
 	if writePDF:
 		pdf_file = filename.rsplit(".",1)[0] + ".pdf"
@@ -495,61 +498,64 @@ if __name__ == "__main__":
 
 	peak_clean_range = int(500 // 4)
 
-	if (np.max(y) != np.min(y)):
-		peak_value = 0
-		y_squared = np.abs(np.array(y))
-		th = 10.0*np.std(np.abs(np.array(y)))
-		#th = 5000
-		n_peaks_vec = []
-		th_vec = []
-		peak_old = -10
-		d_th = min(th*0.005,10)
-		count = 0
-		while peak_value < 3.5:
-			count += 1
-			peaks = findPeaks(y_squared, th)
-			peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
-			peaks_indexed = np.array(index) * np.array(peaks_cleaned)
-			peak_value = 500 * np.mean(np.array(peaks_indexed)) / np.mean(np.array(index))
+	th = manual_th
+	if manual_th < 0:
+		if (np.max(y) != np.min(y)):
+			peak_value = 0
+			y_squared = np.abs(np.array(y))
+			th = 10.0*np.std(np.abs(np.array(y)))
+			#th = 5000
+			n_peaks_vec = []
+			th_vec = []
+			peak_old = -10
+			d_th = min(th*0.005,10)
+			count = 0
+			while peak_value < 3.5:
+				count += 1
+				peaks = findPeaks(y_squared, th)
+				peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
+				peaks_indexed = np.array(index) * np.array(peaks_cleaned)
+				peak_value = 500 * np.mean(np.array(peaks_indexed)) / np.mean(np.array(index))
+	
+				if math.isnan(peak_value):
+					print("NAN issue")
+					sys.exit(-1)
+	
+				print ("\tpeak value", peak_value, th)
+				n_peaks_vec.append(peak_value)
+				th_vec.append(th)
+	
+				if count > 200 and peak_value<0.2:
+					d_th = 1
+				if count > 400 and peak_value<0.2:
+					d_th = 0.2
+				
+				if peak_value > 1 and abs(peak_value-peak_old) < 0.00001:
+					break
 
-			if math.isnan(peak_value):
-				print("NAN issue")
-				sys.exit(-1)
+				peak_old = peak_value
+				th -= d_th
+		
 
-			print ("\tpeak value", peak_value, th)
-			n_peaks_vec.append(peak_value)
-			th_vec.append(th)
-
-			if count > 200 and peak_value<0.2:
-				d_th = 1
-			if count > 400 and peak_value<0.2:
-				d_th = 0.2
+			plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
 			
-			if peak_value > 1 and abs(peak_value-peak_old) < 0.00001:
-				break
+			slope = []
+			for i in range(0,len(n_peaks_vec)-1):
+				if n_peaks_vec[i] > 1:
+					slope.append(abs(n_peaks_vec[i]-n_peaks_vec[i+1]))
+				else:
+					slope.append(100)
+			th = th_vec[slope.index(min(slope))]
 
-			peak_old = peak_value
-			th -= d_th
+			ind = th_vec.index(th)
+			plt.plot(ind, n_peaks_vec[ind], 'o')
+			plt.title("Optimal TH = " + str(th))
+			plt.savefig(pdf_file_peakfitting)
 
-		plt.plot(range(0,len(n_peaks_vec)), n_peaks_vec)
-			
-		slope = []
-		for i in range(0,len(n_peaks_vec)-1):
-			if n_peaks_vec[i] > 1:
-				slope.append(abs(n_peaks_vec[i]-n_peaks_vec[i+1]))
-			else:
-				slope.append(100)
-		th = th_vec[slope.index(min(slope))]
-
-		ind = th_vec.index(th)
-		plt.plot(ind, n_peaks_vec[ind], 'o')
-		plt.title("Optimal TH = " + str(th))
-		plt.savefig(pdf_file_peakfitting)
-
-	else:
-		print ('no values')
-		th = 1
-		sys.exit(-1)
+		else:
+			print ('no values')
+			th = 1
+			sys.exit(-1)
 
 	peaks = findPeaks(np.abs(np.array(y)), th)
 	peaks_cleaned = cleanPeaks(peaks, peak_clean_range)
