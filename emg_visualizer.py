@@ -59,6 +59,7 @@ class DataManager:
         return 1+int(np.floor(x_val/60))
     
     def __init__(self, filename):
+        self.filename_in = filename
         self.infile = open(filename)
         self.header_line = self.infile.readline()
         self.header_columns = self.header_line.rstrip('\r\n').split(",")
@@ -76,9 +77,6 @@ class DataManager:
 
     def readData(self, plot_cols, usage_cols, progress_label, usg_manual_col, jmp_col):
         # Zerobased counting of columns (First column = 0)
-        del_usage_manual_col = -1
-        if '"usage_manual"' in self.header_columns:
-            del_usage_manual_col = self.header_columns.index('"usage_manual"')
         plot_data = []
         for i in range(0,len(plot_cols)):
             plot_data.append([])
@@ -88,8 +86,7 @@ class DataManager:
         usage_manual = []
         time_axis = []
         jmp_idxs = []
-        count = 0
-        self.data_lines = []
+        self.file_length = 0
         for l in self.infile:
             tmp = l.rstrip('\r\n').split(",")
             for p in range(0,len(plot_cols)):
@@ -100,45 +97,51 @@ class DataManager:
                 usage_manual.append(int(tmp[usg_manual_col]))
             else:
                 usage_manual.append(1)
-            time_axis.append(count/500.0)
+            time_axis.append(self.file_length/500.0)
             if jmp_col >= 0 and int(tmp[jmp_col]) == 1:
-                jmp_idxs.append(count/500.0)
-            count += 1
-            if del_usage_manual_col > -1:
-                del tmp[del_usage_manual_col]
-                self.data_lines.append(','.join(tmp)+'\r\n')
-            else:
-                self.data_lines.append(l)
-            if count%(500*60) == 0:
-                progress_label['text'] = 'loading ... ({} minutes loaded)'.format(count/500/60)
+                jmp_idxs.append(self.file_length/500.0)
+            self.file_length += 1
+            if self.file_length%(500*60) == 0:
+                progress_label['text'] = 'loading ... ({} minutes loaded)'.format(self.file_length/500/60)
                 progress_label.update()
-
-        self.file_length = len(self.data_lines)
 
         self.pages = range(0, self.file_length, self.dx)
         self.num_pages = len(self.pages)
+
+        self.infile.close()
 
         print("reading done")
         progress_label['text'] = 'loading done, preparing plots ...'
         progress_label.update()
         return [time_axis, plot_data, usage_data, np.array(usage_manual), jmp_idxs]
 
-    def writeCSV(self, filename, manual_usg):
-        outfile = open(filename, 'w')
-    
-        print("saving to file ({})".format(filename))
+    def writeCSV(self, filename_out, manual_usg):
+        del_usage_manual_col = -1
+        if '"usage_manual"' in self.header_columns:
+            del_usage_manual_col = self.header_columns.index('"usage_manual"')        
         
-        header = '{},"usage_manual"\r\n'.format(self.header_line.replace(',"usage_manual"', '').rstrip('\r\n'))
-        outfile.write(header)
-    
-        for i in range(0,self.file_length):
-            if (i>0) and (np.fmod(i,1000) < 0.001):
-                sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/self.file_length) )
-                sys.stdout.flush()
-            result = self.data_lines[i].rstrip('\r\n') + ","
-            result += str(manual_usg[i]) + "\r\n"
-            outfile.write(result)
-        outfile.close()
+        print("saving to file ({})".format(filename_out))
+        
+        is_header_line = True
+        i = 0
+        with open(self.filename_in,'r') as fin:
+            with open(filename_out,'w') as fout:
+                for line in fin:
+                    if is_header_line:
+                        fout.write('{},"usage_manual"\r\n'.format(line.replace(',"usage_manual"', '').rstrip('\r\n')))
+                        is_header_line = False
+                    else:
+                        if (i>0) and (np.fmod(i,1000) < 0.001):
+                            sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/self.file_length) )
+                            sys.stdout.flush()
+                        if del_usage_manual_col > -1:
+                            tmp = line.rstrip('\r\n').split(",")
+                            del tmp[del_usage_manual_col]
+                            fout.write(','.join(tmp)+ "," + str(manual_usg[i]) + "\r\n")
+                        else:
+                            fout.write(line.rstrip('\r\n') + "," + str(manual_usg[i]) + "\r\n")
+                        i+=1
+                        
         print("\r\ndone")
         
     def writeAutoSave(self, autosave_filename, manual_usg):
