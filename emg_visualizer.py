@@ -300,9 +300,13 @@ class VisualizerWindow:
 
         if len(self.dataMgr.jump_columns) == 0:
             self.jmp_select = ttk.Combobox(self.configFrame, values=['--none--'], state="readonly")
+            self.jmp_select.current(0)
         else: 
             self.jmp_select = ttk.Combobox(self.configFrame, values=self.dataMgr.jump_columns, state="readonly")
-        self.jmp_select.current(0)        
+            if '"jump_ibi"' in self.dataMgr.jump_columns:
+                self.jmp_select.current(self.dataMgr.jump_columns.index('"jump_ibi"'))
+            else:
+                self.jmp_select.current(0)        
         self.jmp_select.pack()
 
         
