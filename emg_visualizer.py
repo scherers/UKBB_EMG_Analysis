@@ -131,7 +131,7 @@ class DataManager:
                         fout.write('{},"usage_manual"\r\n'.format(line.replace(',"usage_manual"', '').rstrip('\r\n')))
                         is_header_line = False
                     else:
-                        if (i>0) and (np.fmod(i,1000) < 0.001):
+                        if i%10000 == 0:
                             sys.stdout.write("\r\t\t%d%%" % float((100.0*i)/self.file_length) )
                             sys.stdout.flush()
                         if del_usage_manual_col > -1:
