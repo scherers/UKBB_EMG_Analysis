@@ -756,6 +756,8 @@ class VisualizerWindow:
         if os.path.isfile(self.autosave_file):
             archive_filename = self.autosave_file.rsplit(".", 1)[0] + "_old.pkl"
             print('renaming autosave file from "{}" to "{}"'.format(self.autosave_file, archive_filename))
+            if os.path.isfile(archive_filename):            
+                os.unlink(archive_filename)
             os.rename(self.autosave_file, archive_filename)
         
         
